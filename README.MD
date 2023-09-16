@@ -2,25 +2,42 @@
 
 (**Code with Papers: Multi-Object Tracking**):(https://paperswithcode.com/task/multi-object-tracking/latest)
 
-(**Paddlepaddle Detection MOT Github**):(https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.3/configs/mot)
-
-(**ByteTrack: Multi-Object Tracking by Associating Every Detection Box**):(https://github.com/ifzhang/ByteTrack)
-
-(**Towards-Realtime-MOT**): (https://github.com/Zhongdao/Towards-Realtime-MOT)
-
 •	这个方向需要
 o	检测追踪骨骼识别行动识别
 o	只训练最后一个动作识别，别的用现成的就可以
 •	检测和追踪你可以用yolo，然后骨骼识别用什么模型，以及行动识别用什么模型都需要做调查
 •	先调查确定用什么模型，然后再开始收集数据训练，都需要什么模型，现在最先进的模型有哪些等等
+Person re-identification (ReID) – An embedding model
+OpenCV tracking human from given bounding box and assign ID to each detected human
+YOLOX - Apache-2.0 license
 
-Detect & tracking
-•	YOLO to detect human
-•	OpenCV tracking human from given bounding box and assign ID to each detected human
+Object detection & tracking
+•	Hybrid-SORT: Weak Cues Matter for Online Multi-Object Tracking – 2023/8/1
+o	GitHub - GPL-3.0 license
+o	Two steps
+1.	Use YOLOX model as detector
+2.	Use BoT-SORT for ReID
+•	Yolov7 + StrongSORT with OSNet GitHub – 2022 - GPL-3.0 license
+•	ByteTrack: Multi-Object Tracking by Associating Every Detection Box – 2021/10/13
+o	GitHub – MIT license
+o	Two steps
+1.	Use YOLOX as detector
+2.	Combining BYTE for ReID
+•	Towards Real-Time Multi-Object Tracking – 2019/9/27
+o	GitHub – MIT license
+o	Joint Detection Embedding
+	Simultaneously output the location and appearance embeddings of targets in a single forward pass, as a single unified model
+	Use Darknet-53 as backbone network (similar to YOLO)
+•	BoT-SORT: Robust Associations Multi-Pedestrian Tracking – 2022/6/29
+o	GitHub – MIT license
+o	It is only a tracker (ReID). Relying YOLOX for detect and provide bounding box
+•	Observation-Centric SORT: Rethinking SORT for Robust Multi-Object Tracking – 2022/3/27
+o	GitHub – MIT license
+
 
 Pose Estimation (usually works in 2 stages)
-•	Person detection
-•	Keypoints localization
+1.	Person detection
+2.	Keypoints localization
 •	Based on which stage comes first, they can be categorized into the Top-down and Bottom-up approaches.
 o	Top-down approach
 	The person is detected first then the landmarks are localized for each person
@@ -45,3 +62,5 @@ o	YOLOv5 based (The pose implementation branch in YOLOv7 repo is also based on t
 
 Fall Detection using Pose Estimation
 YOLOv7 Pose vs MediaPipe in Human Pose Estimation
+
+
