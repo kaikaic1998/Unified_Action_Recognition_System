@@ -3,6 +3,7 @@ o	检测追踪骨骼识别行动识别
 o	只训练最后一个动作识别，别的用现成的就可以
 •	检测和追踪你可以用yolo，然后骨骼识别用什么模型，以及行动识别用什么模型都需要做调查
 •	先调查确定用什么模型，然后再开始收集数据训练，都需要什么模型，现在最先进的模型有哪些等等
+
 -	Person re-identification (ReID) – An embedding model
 -	OpenCV tracking human from given bounding box and assign ID to each detected human
 -	YOLOX - Apache-2.0 license
@@ -81,11 +82,36 @@ o	Build on top of YOLOv5 (The pose implementation branch in YOLOv7 repo is also 
 o	It is bottom-up
 o	A single unified model that an detect and produce both bounding box and keypoints as outputs
 
+Graph Convolutional Network takes sequence of joint coordinates as inputs and models skeleton data with a GCN backbone
+NTU RGB+D is a large-scale dataset for RGB-D human action recognition. It involves 56,880 samples of 60 action classes collected from 40 subjects
+
 Skeleton Based Action Recognition
-•	Skeleton-Based Action Recognition with Multi-Stream Adaptive Graph Convolutional Networks – 2019/12/15
-o	GitHub – Non-commercial (Creative Commons Public Licenses)
 •	PYSKL: Towards Good Practices for Skeleton Action Recognition – 2022/5/19
 o	GitHub - Apache-2.0 license
+o	A unified framework that uses 6 different action recognition algorithms
+	GCN based
+•	ST-GCN
+•	AAGCN
+•	MS-G3D
+•	CTR-GCN
+•	ST-GCN++ (proposed by this paper)
+	CNN based
+•	PoseC3D
+o	For 2D skeletons, it takes predicted 2D skeletons by pose estimator
+o	Proposed ST-GCN++, an improvement on ST-GCN
+	Only simple modifications to the ST-GCN
+•	Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition – 2018/1/23
+o	GitHub - Apache-2.0 license
+o	First proposed using GCN for skeleton-based action recognition
+	Proposed Spatial-Temporal Graph Convolutional Networks (ST-GCN)
+	For 2D skeleton, uses pose estimation results from OpenPose toolbox that outputs 18 joints
+o	Pipeline
+1.	Takes sequence of frames of pose estimation (2D or 3D) as input
+2.	Construct spatial temporal graph on skeleton sequences
+3.	Apply multiple layers of spatial-temporal graph convolution (ST-GCN) to general feature maps on the graph
+4.	Classify action category by standard Softmax classifier
+ 
+
 
 
 PointNet: Deep Learning on Point Sets for 3D Classification and Segmentation
