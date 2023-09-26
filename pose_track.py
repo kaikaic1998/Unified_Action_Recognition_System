@@ -79,7 +79,7 @@ class LoadImages:  # for inference
                     ret_val, img0 = self.cap.read()
 
             self.frame += 1
-            print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ')
+            print(f'proccessing video frame {self.frame} out of {self.nframes}')
 
         else:
             # Read image
@@ -193,7 +193,9 @@ def detect():
     imgsz = 640
 
     # source = '0'
-    source = './video/ntu_sample.avi'
+    # source = './video/ntu_sample.avi'
+    # source = './video/tennis.mp4'
+    source = './video/breakdance.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -257,15 +259,12 @@ def detect():
 
         # Apply NMS
         output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
-        
-        detections = []
 
         with torch.no_grad():
-            # output, detections= output_to_keypoint_and_detections(output)
+            # output = all keypoints in 1 frame
+            # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
             output, detections = output_to_keypoint_and_detections(output)
-
-        # print('\ndetections type: ', type(detections))
-        # print('detections: ', detections)
+            # output and detections types are np.array
 
         # img: tensor, torch.Size([1, 3, 384, 640])
         nimg = img[0].permute(1, 2, 0) * 255
@@ -290,6 +289,7 @@ def detect():
         online_ids = []
         online_scores = []
         online_cls = []
+
         for t in online_targets:
             tlwh = t.tlwh
             tlbr = t.tlbr

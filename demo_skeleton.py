@@ -219,40 +219,90 @@ def pose_tracking(pose_results, max_tracks=2, thre=30):
         for item in track['data']:
             idx, pose = item
             result[i, idx] = pose
+
+    # [..., :2] = select the ----first two elements---- along the last dimension of a multidimensional NumPy array
+    # [..., 2] = select the ----third element---- along the last dimension of a multidimensional NumPy array
     return result[..., :2], result[..., 2]
 
 
 def main():
     args = parse_args()
 
-    frame_paths, original_frames = frame_extraction(args.video,
-                                                    args.short_side)
+    # args.video = video/breakdance.mp4
+    # args.short_side = 480 (default set to 480)
+    frame_paths, original_frames = frame_extraction(args.video, args.short_side)
+    # frame_paths = all the temp stored images directories extracted from the video
+    # original_frames = a list containing all images in form of list
+
+    # Run human detectiom
+    det_results = detection_inference(args, frame_paths)
+    torch.cuda.empty_cache()
+    # det_results contains all detections of all frames
+    # det_results[i] contains all detections in one frame
+    # det_results is list, length = num of frames, each sub-lists contains detections in one frame
+
+    # run human keypoints from detected human with bbox
+    pose_results = pose_inference(args, frame_paths, det_results)
+    torch.cuda.empty_cache()
+    # pose_results type = list
+    # list lentgh = number of frames
+    #
+    # pose_results[i] length = num of detected human in one frame
+    # pose_results[i] contains 2 dictionary, for all detected human
+    #   one is 'bbox' : np.array of box coordinates
+    #   one is 'keypoints' : np.array or key points (17 keypoints, same as COCO)
+    #
+    # pose_results[i][j] = bbox and kepoints dict for one human
+    #
+    # pose_results[i][j]['bbox] = np.array of bbox coordinates
+    # pose_results[i][j]['keypoints'] = np.array of keypoints
+
+
+    #----------------------------------------------------------------------------------------------
+    #-------------------------------action recognition---------------------------------------------
+
+    # num_frame = number of frames obtained from the video
     num_frame = len(frame_paths)
+    
+    # h = 480, w = 854
     h, w, _ = original_frames[0].shape
 
+    # skeleton action recognition config file path
+    # args.config = configs/stgcn++/stgcn++_ntu120_xsub_hrnet/j.py
     config = mmcv.Config.fromfile(args.config)
+
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+
+    # skeleton action recognition checkpoint file/url
+    # j.pth is stored in .cache folder
+    # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
+    model = init_recognizer(config, args.checkpoint, args.device)
+
+    # args.label_map = tools/data/label_map/nturgbd_120.txt
+    # Load label_map
+    label_map = [x.strip() for x in open(args.label_map).readlines()]
+
+    # config.data.test.pipeline:
+    # [
+    #     {'type': 'PreNormalize2D'}                                                , 
+    #     {'type': 'GenSkeFeat', 'dataset': 'coco', 'feats': ['j']}                 , 
+    #     {'type': 'UniformSample', 'clip_len': 100, 'num_clips': 10}               , 
+    #     {'type': 'PoseDecode'}                                                    , 
+    #     {'type': 'FormatGCNInput', 'num_person': 2}                               , 
+    #     {'type': 'Collect', 'keys': ['keypoint', 'label'], 'meta_keys': []}       , 
+    #     {'type': 'ToTensor', 'keys': ['keypoint']}
+    # ]
+
     # Are we using GCN for Infernece?
-    GCN_flag = 'GCN' in config.model.type
+    GCN_flag = 'GCN' in config.model.type # GCN_flag = True
+    
     GCN_nperson = None
     if GCN_flag:
         format_op = [op for op in config.data.test.pipeline if op['type'] == 'FormatGCNInput'][0]
         # We will set the default value of GCN_nperson to 2, which is
         # the default arg of FormatGCNInput
-        GCN_nperson = format_op.get('num_person', 2)
-
-    model = init_recognizer(config, args.checkpoint, args.device)
-
-    # Load label_map
-    label_map = [x.strip() for x in open(args.label_map).readlines()]
-
-    # Get Human detection results
-    det_results = detection_inference(args, frame_paths)
-    torch.cuda.empty_cache()
-
-    pose_results = pose_inference(args, frame_paths, det_results)
-    torch.cuda.empty_cache()
-
+        GCN_nperson = format_op.get('num_person', 0)
+    
     fake_anno = dict(
         frame_dir='',
         label=-1,
@@ -262,10 +312,28 @@ def main():
         modality='Pose',
         total_frames=num_frame)
 
+    # GCN_flag = True, this runs
     if GCN_flag:
         # We will keep at most `GCN_nperson` persons per frame.
         tracking_inputs = [[pose['keypoints'] for pose in poses] for poses in pose_results]
-        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=GCN_nperson)
+        # tracking_inputs = all keypoints for all human in all frames
+
+        # Run tracking from keypoints                        max_tracks = how many sets of keypoints (traking how many people)
+        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=1) # GCN_nperson = 2
+        # len(keypoint) = max_tracks
+        #
+        # keypoint[0] length = num of frames
+        # 
+        # keypoint[0][i] length = 17 (one set of keypoints)
+        # keypoint[0][i] = a list containing 1 set of keypoints of one person, in one frame
+
+        print('keypoint len: ', len(keypoint))
+        # print('\nkeypoints[0]:\n', keypoint[0])
+        # print('\nkeypoints[1]:\n', keypoint[1])
+        # print('\nkeypoints[0]:\n', len(keypoint[0]))
+        # print('\nkeypoints[1]:\n', len(keypoint[1]))
+
+        # fake_anno type = dict
         fake_anno['keypoint'] = keypoint
         fake_anno['keypoint_score'] = keypoint_score
     else:
@@ -285,11 +353,24 @@ def main():
         fake_anno['keypoint_score'] = keypoint_score
 
     results = inference_recognizer(model, fake_anno)
+    # results = a list of tuple with length of 4
+    # each tuple = (action_label index, label confidence)
+    # results[0] has the highest score, last tuple has the lowest score
 
+    # results[0][0] = index of label with the highest score
     action_label = label_map[results[0][0]]
+    # action_lable = name of the action
 
-    pose_model = init_pose_model(args.pose_config, args.pose_checkpoint,
-                                 args.device)
+    #-------------------------------action recognition---------------------------------------------
+    #----------------------------------------------------------------------------------------------
+
+
+    # args.pose_config = demo/hrnet_w32_coco_256x192.py
+    # args.pose_checkpoint = https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w32_coco_256x192-c78dce93_20200708.pth
+    pose_model = init_pose_model(args.pose_config, args.pose_checkpoint, args.device)
+    # this is only for visualization
+    # it is just how mmpose.apis works for visualizing
+
     vis_frames = [
         vis_pose_result(pose_model, frame_paths[i], pose_results[i])
         for i in range(num_frame)
@@ -297,6 +378,8 @@ def main():
     for frame in vis_frames:
         cv2.putText(frame, action_label, (10, 30), FONTFACE, FONTSCALE,
                     FONTCOLOR, THICKNESS, LINETYPE)
+        # cv2.imshow('', frame)
+        # cv2.waitKey(10)
 
     vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=24)
     vid.write_videofile(args.out_filename, remove_temp=True)
