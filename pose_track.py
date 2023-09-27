@@ -171,6 +171,8 @@ def output_to_keypoint_and_detections(output):
     targets = []
     detections = []
 
+    keypoints_diff_format = []
+
     for i, o in enumerate(output):
         kpts = o[:,6:]
         o = o[:,:6] # all detected boxes, format: tensor([ [box_coordinates_xyxy, confidence, class] x #of detections ]) 
@@ -179,7 +181,11 @@ def output_to_keypoint_and_detections(output):
             # box = the bounding box in form of x1 y1 x2 y2,  where xy1=top-left, xy2=bottom-right
             # xyxy2xywh() converts nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] where xy1=top-left, xy2=bottom-right
             targets.append([i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf, *list(kpts.detach().cpu().numpy()[index])])
+            # print('keypoints: ', list(kpts.detach().cpu().numpy()[index]))
+            # print('index: ', index)
             detections.append([*box, conf, cls])
+
+
 
     return np.array(targets), np.array(detections)
 #---------------------------------------------------------------------------------------------
@@ -271,15 +277,26 @@ def detect():
         nimg = nimg.cpu().numpy().astype(np.uint8)
         # # nimg: numpy array (384, 640, 3)
 
+        #------------------------------------------------------------------------- 
+        #--------------------keypoints visualization------------------------------
         for idx in range(output.shape[0]): # output.shape[0] = number of skeletons detected
             plot_skeleton_kpts(nimg, output[idx, 7:].T, 3)
+        # print('keypoints: ', output[idx, 7:])
         # # Stream results
         # cv2.imshow('0', nimg) # nimg: numpy array (384, 640, 3)
         # cv2.waitKey(1)  # 1 millisecond
+        #------------------------------------------------------------------------- 
+        #--------------------keypoints visualization------------------------------
+
 
         #---------------------------------------------------------------------
         # Process detections
         # results = [] # all results in one frame
+
+        for i in range(len(detections)):
+            detections[i][-1] = np.float32(i)
+        for i in range(len(detections)):
+            print('detection[', i, ']: ', detections[i])
 
         # tracker operations
         # image tpye for tracker should be numpy array, in format of (height, length, 3)
@@ -290,16 +307,26 @@ def detect():
         online_scores = []
         online_cls = []
 
+        # in each frame
+        # IDs and bbox from the oline_targets are in the same order
+        # 
+        # ex: in the same loop
+        #       the first bbox is belong to the first ID
+        #       the second bbox is belong to the second ID, and so on
+        #
+        # the order is different from the order in detections
         for t in online_targets:
-            tlwh = t.tlwh
-            tlbr = t.tlbr
-            tid = t.track_id
-            tcls = t.cls
-            if tlwh[2] * tlwh[3] > opt.min_box_area:
+            tlwh = t.tlwh # used for filtering out small boxes
+            tlbr = t.tlbr # bbox coordinates
+            tid = t.track_id # a number id for each tracked person, tpye: int
+            tcls = t.cls # class, here = 0.0, because it is always a person class, type: numpy.float32
+            if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
                 online_tlwhs.append(tlwh)
                 online_ids.append(tid)
                 online_scores.append(t.score)
                 online_cls.append(t.cls)
+
+                print('id: ', tid, ', bbox: ', tlbr)
 
                 # # save results
                 # results.append(
@@ -319,9 +346,16 @@ def detect():
         # cv2.putText(nimg, 'fps: %.2f' % fps,
         #         (0, int(15 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
         
+# output of tracking needs to be:
+#   a list of lists, number of sub-lists = number of tracked person
+#   each sub-list has number of sub-sub-lists = number of frames
+#   sub-sub-list contains the keypoints of one person
+#
+# meaning: the tracked bbox also needs to have its cooresponding keypoints
+
         # Stream results
         cv2.imshow('', nimg)
-        cv2.waitKey(1)  # 1 millisecond
+        cv2.waitKey(0)  # 1 millisecond
         # i += 1
         #---------------------------------------------------------------------
     

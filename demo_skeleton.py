@@ -126,7 +126,7 @@ def frame_extraction(video_path, short_side):
             h, w, _ = frame.shape
             new_w, new_h = mmcv.rescale_size((w, h), (short_side, np.Inf))
 
-        frame = mmcv.imresize(frame, (new_w, new_h))
+        frame = mmcv.imresize(frame, (640, 384))
 
         frames.append(frame)
         frame_path = frame_tmpl.format(cnt + 1)
@@ -301,7 +301,7 @@ def main():
         format_op = [op for op in config.data.test.pipeline if op['type'] == 'FormatGCNInput'][0]
         # We will set the default value of GCN_nperson to 2, which is
         # the default arg of FormatGCNInput
-        GCN_nperson = format_op.get('num_person', 0)
+        GCN_nperson = format_op.get('num_person', 2)
     
     fake_anno = dict(
         frame_dir='',
@@ -319,19 +319,17 @@ def main():
         # tracking_inputs = all keypoints for all human in all frames
 
         # Run tracking from keypoints                        max_tracks = how many sets of keypoints (traking how many people)
-        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=1) # GCN_nperson = 2
-        # len(keypoint) = max_tracks
+        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=1) 
+        # len(keypoint) = max_tracks = number of tracked person
         #
         # keypoint[0] length = num of frames
         # 
         # keypoint[0][i] length = 17 (one set of keypoints)
-        # keypoint[0][i] = a list containing 1 set of keypoints of one person, in one frame
+        # keypoint[0][i] = a np.array containing 1 set of keypoints of one person, in one frame
 
-        print('keypoint len: ', len(keypoint))
-        # print('\nkeypoints[0]:\n', keypoint[0])
-        # print('\nkeypoints[1]:\n', keypoint[1])
-        # print('\nkeypoints[0]:\n', len(keypoint[0]))
-        # print('\nkeypoints[1]:\n', len(keypoint[1]))
+        # print('keypoint len: ', len(keypoint))
+        print('\nkeypoints: ', keypoint[0][-1])
+        print('\nkeypoints type: ', type(keypoint[0][-1]))
 
         # fake_anno type = dict
         fake_anno['keypoint'] = keypoint
@@ -363,7 +361,6 @@ def main():
 
     #-------------------------------action recognition---------------------------------------------
     #----------------------------------------------------------------------------------------------
-
 
     # args.pose_config = demo/hrnet_w32_coco_256x192.py
     # args.pose_checkpoint = https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w32_coco_256x192-c78dce93_20200708.pth
