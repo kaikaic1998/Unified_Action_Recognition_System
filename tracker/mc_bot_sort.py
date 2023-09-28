@@ -51,7 +51,10 @@ class STrack(BaseTrack):
             max_freq = 0
             found = False
             for c in self.cls_hist:
-                if cls == c[0]:
+                #-------------------------------
+                # if cls == c[0]:
+                if np.all(cls == c[0]):
+                #-------------------------------
                     c[1] += score
                     found = True
 
@@ -263,8 +266,10 @@ class BoTSORT(object):
         if len(output_results):
             bboxes = output_results[:, :4]
             scores = output_results[:, 4]
-            classes = output_results[:, 5]
-            features = output_results[:, 6:]
+            # classes = output_results[:, 5]
+            classes = output_results[:, 5:]
+            features = []
+            # features = output_results[:, 6:]
 
             # Remove bad detections
             lowest_inds = scores > self.track_low_thresh

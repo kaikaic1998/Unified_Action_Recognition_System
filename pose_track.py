@@ -171,8 +171,6 @@ def output_to_keypoint_and_detections(output):
     targets = []
     detections = []
 
-    keypoints_diff_format = []
-
     for i, o in enumerate(output):
         kpts = o[:,6:]
         o = o[:,:6] # all detected boxes, format: tensor([ [box_coordinates_xyxy, confidence, class] x #of detections ]) 
@@ -183,8 +181,9 @@ def output_to_keypoint_and_detections(output):
             targets.append([i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf, *list(kpts.detach().cpu().numpy()[index])])
             # print('keypoints: ', list(kpts.detach().cpu().numpy()[index]))
             # print('index: ', index)
-            detections.append([*box, conf, cls])
-
+            # cls = sum(list(kpts.detach().cpu().numpy()[index]))/len(list(kpts.detach().cpu().numpy()[index]))
+            # detections.append([*box, conf, cls])
+            detections.append([*box, conf, *(list(kpts.detach().cpu().numpy()[index]))])
 
 
     return np.array(targets), np.array(detections)
@@ -199,9 +198,9 @@ def detect():
     imgsz = 640
 
     # source = '0'
-    # source = './video/ntu_sample.avi'
+    source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
-    source = './video/breakdance.mp4'
+    # source = './video/breakdance.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -243,7 +242,9 @@ def detect():
 
     start_time = time.time()
     
-    # i = 0
+    input_to_GCN = []
+
+    # frame_number = 0
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
         # img: numpy array (384, 640, 3)
         #--------------------------------------------------------------
@@ -255,7 +256,7 @@ def detect():
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
         img = img.permute(0,3,1,2)
-        with torch.no_grad(): 
+        with torch.no_grad():
             output, _ = model(img)
         #--------------------------------------------------------------
         # img: tensor, torch.Size([1, 3, 384, 640])
@@ -270,6 +271,7 @@ def detect():
             # output = all keypoints in 1 frame
             # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
             output, detections = output_to_keypoint_and_detections(output)
+            # detections = output_to_keypoint_and_detections(output)
             # output and detections types are np.array
 
         # img: tensor, torch.Size([1, 3, 384, 640])
@@ -279,8 +281,11 @@ def detect():
 
         #------------------------------------------------------------------------- 
         #--------------------keypoints visualization------------------------------
-        for idx in range(output.shape[0]): # output.shape[0] = number of skeletons detected
-            plot_skeleton_kpts(nimg, output[idx, 7:].T, 3)
+        # for idx in range(output.shape[0]): # output.shape[0] = number of skeletons detected
+        #     plot_skeleton_kpts(nimg, output[idx, 7:].T, 3)
+        for idx in range(detections.shape[0]): # output.shape[0] = number of skeletons detected
+            plot_skeleton_kpts(nimg, detections[idx][5:].T, 3)
+
         # print('keypoints: ', output[idx, 7:])
         # # Stream results
         # cv2.imshow('0', nimg) # nimg: numpy array (384, 640, 3)
@@ -293,10 +298,14 @@ def detect():
         # Process detections
         # results = [] # all results in one frame
 
-        for i in range(len(detections)):
-            detections[i][-1] = np.float32(i)
-        for i in range(len(detections)):
-            print('detection[', i, ']: ', detections[i])
+        # det_dict = {}
+        # for i in range(len(detections)):
+        #     detections[i][-1] = np.float32(i)
+        #     det_dict[i] = detections[i]
+        # print('\n')
+        # for i in range(len(detections)):
+        #     print('detections: ', detections[i])
+        #     print('det_dict[', i, ']: ', det_dict[i])
 
         # tracker operations
         # image tpye for tracker should be numpy array, in format of (height, length, 3)
@@ -305,40 +314,46 @@ def detect():
         online_tlwhs = []
         online_ids = []
         online_scores = []
-        online_cls = []
+        # online_cls = []
 
-        # in each frame
-        # IDs and bbox from the oline_targets are in the same order
-        # 
-        # ex: in the same loop
-        #       the first bbox is belong to the first ID
-        #       the second bbox is belong to the second ID, and so on
-        #
-        # the order is different from the order in detections
+        # input_to_GCN
+        # add one sub-list to input_toGCN for this one frame
+        temp_dict = dict() # need this because output of id is not in number order
+
         for t in online_targets:
             tlwh = t.tlwh # used for filtering out small boxes
             tlbr = t.tlbr # bbox coordinates
             tid = t.track_id # a number id for each tracked person, tpye: int
-            tcls = t.cls # class, here = 0.0, because it is always a person class, type: numpy.float32
+            # tcls = t.cls # class, here = 0.0, because it is always a person class, type: numpy.float32
+
+            keypoints = []
+            steps = 3
+            num_keypoints = len(t.cls) // steps
+
+            for i in range(num_keypoints):
+                x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
+                keypoints.append([x_coord, y_coord])
+
             if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
                 online_tlwhs.append(tlwh)
                 online_ids.append(tid)
                 online_scores.append(t.score)
-                online_cls.append(t.cls)
-
-                print('id: ', tid, ', bbox: ', tlbr)
+                # online_cls.append(t.cls)
 
                 # # save results
                 # results.append(
                 #     f"{i + 1},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},-1,-1,-1\n"
                 # )
-
+                temp_dict[tid] = keypoints # add keypoint to dict with its associated id
+                # print('id: ', tid)
                 # if opt.hide_labels_name:
                 #     label = f'{tid}, {int(tcls)}'
                 # else:
                 #     label = f'{tid}, {names[int(tcls)]}'
-                label = f'{tid}, {int(tcls)}'
+                # label = f'{tid}, {int(tcls)}'
+                label = f'{tid}'
                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+                # plot_skeleton_kpts(nimg, keypoints, 3)
         
         # timer.toc()
         # text_scale = 2
@@ -346,23 +361,28 @@ def detect():
         # cv2.putText(nimg, 'fps: %.2f' % fps,
         #         (0, int(15 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
         
-# output of tracking needs to be:
-#   a list of lists, number of sub-lists = number of tracked person
-#   each sub-list has number of sub-sub-lists = number of frames
-#   sub-sub-list contains the keypoints of one person
-#
-# meaning: the tracked bbox also needs to have its cooresponding keypoints
-
         # Stream results
         cv2.imshow('', nimg)
-        cv2.waitKey(0)  # 1 millisecond
-        # i += 1
+        cv2.waitKey(1)  # 1 millisecond
+        # frame_number += 1
         #---------------------------------------------------------------------
-    
+        keypoints_after_tracked = []
+
+        for id in online_ids:
+            keypoints_after_tracked.append(temp_dict[id]) # temp_dict[id] type is np.array
+
+        input_to_GCN.append(keypoints_after_tracked)
+
+    input_to_GCN = np.array(input_to_GCN)
+    print('input_to_GCN shape: ', input_to_GCN.shape)
+
+
+
     end_time = time.time()
     execution_time = end_time - start_time
     print('time spent on inference: ', round(execution_time, 2))
     print('fps: ', round(84/execution_time, 2))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -319,7 +319,7 @@ def main():
         # tracking_inputs = all keypoints for all human in all frames
 
         # Run tracking from keypoints                        max_tracks = how many sets of keypoints (traking how many people)
-        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=1) 
+        keypoint, keypoint_score = pose_tracking(tracking_inputs, max_tracks=2) 
         # len(keypoint) = max_tracks = number of tracked person
         #
         # keypoint[0] length = num of frames
@@ -327,9 +327,9 @@ def main():
         # keypoint[0][i] length = 17 (one set of keypoints)
         # keypoint[0][i] = a np.array containing 1 set of keypoints of one person, in one frame
 
-        # print('keypoint len: ', len(keypoint))
-        print('\nkeypoints: ', keypoint[0][-1])
-        print('\nkeypoints type: ', type(keypoint[0][-1]))
+        print('\nkeypoints shape: ', keypoint.shape) # (num of tracked person, 72, 17, 2)
+        print('keypoints[0] shape: ', keypoint[0].shape) # (72, 17, 2)
+        print('keypoints[0][0] shape: ', keypoint[0][0].shape) # (17, 2)
 
         # fake_anno type = dict
         fake_anno['keypoint'] = keypoint
