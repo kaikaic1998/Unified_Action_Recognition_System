@@ -289,7 +289,7 @@ def detect():
         # print('keypoints: ', output[idx, 7:])
         # # Stream results
         # cv2.imshow('0', nimg) # nimg: numpy array (384, 640, 3)
-        # cv2.waitKey(1)  # 1 millisecond
+        # cv2.waitKey(1)
         #------------------------------------------------------------------------- 
         #--------------------keypoints visualization------------------------------
 
