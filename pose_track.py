@@ -243,6 +243,8 @@ def detect():
     start_time = time.time()
     
     input_to_GCN = []
+    # add one sub-list to input_toGCN for this one frame
+    temp_dict = dict() # need this because output of id is not in number order
 
     # frame_number = 0
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
@@ -285,28 +287,10 @@ def detect():
         #     plot_skeleton_kpts(nimg, output[idx, 7:].T, 3)
         for idx in range(detections.shape[0]): # output.shape[0] = number of skeletons detected
             plot_skeleton_kpts(nimg, detections[idx][5:].T, 3)
-
-        # print('keypoints: ', output[idx, 7:])
-        # # Stream results
-        # cv2.imshow('0', nimg) # nimg: numpy array (384, 640, 3)
-        # cv2.waitKey(1)
         #------------------------------------------------------------------------- 
         #--------------------keypoints visualization------------------------------
 
-
         #---------------------------------------------------------------------
-        # Process detections
-        # results = [] # all results in one frame
-
-        # det_dict = {}
-        # for i in range(len(detections)):
-        #     detections[i][-1] = np.float32(i)
-        #     det_dict[i] = detections[i]
-        # print('\n')
-        # for i in range(len(detections)):
-        #     print('detections: ', detections[i])
-        #     print('det_dict[', i, ']: ', det_dict[i])
-
         # tracker operations
         # image tpye for tracker should be numpy array, in format of (height, length, 3)
         online_targets = tracker.update(detections, nimg)
@@ -316,9 +300,9 @@ def detect():
         online_scores = []
         # online_cls = []
 
-        # input_to_GCN
-        # add one sub-list to input_toGCN for this one frame
-        temp_dict = dict() # need this because output of id is not in number order
+        # # input_to_GCN
+        # # add one sub-list to input_toGCN for this one frame
+        # temp_dict = dict() # need this because output of id is not in number order
 
         for t in online_targets:
             tlwh = t.tlwh # used for filtering out small boxes
@@ -344,7 +328,11 @@ def detect():
                 # results.append(
                 #     f"{i + 1},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},-1,-1,-1\n"
                 # )
-                temp_dict[tid] = keypoints # add keypoint to dict with its associated id
+                if tid in temp_dict:
+                    temp_dict[tid].append(keypoints) # add keypoint to dict with its associated id
+                else:
+                    temp_dict[tid] = [keypoints]
+
                 # print('id: ', tid)
                 # if opt.hide_labels_name:
                 #     label = f'{tid}, {int(tcls)}'
@@ -366,15 +354,21 @@ def detect():
         cv2.waitKey(1)  # 1 millisecond
         # frame_number += 1
         #---------------------------------------------------------------------
-        keypoints_after_tracked = []
+    
+    # feed each tracked person to GCN, one at a time
+    # number of inputs = number of tracked ID
+    for id in online_ids:
+        input to GCN (np.array(temp_dict[id]))
+    #     keypoints_after_tracked = []
 
-        for id in online_ids:
-            keypoints_after_tracked.append(temp_dict[id]) # temp_dict[id] type is np.array
+    #     for id in online_ids:
+    #         keypoints_after_tracked.append(temp_dict[id]) # temp_dict[id] type is np.array
+        
 
-        input_to_GCN.append(keypoints_after_tracked)
+    #     input_to_GCN.append(keypoints_after_tracked)
 
-    input_to_GCN = np.array(input_to_GCN)
-    print('input_to_GCN shape: ', input_to_GCN.shape)
+    # input_to_GCN = np.array(input_to_GCN)
+    # print('input_to_GCN shape: ', input_to_GCN.shape)
 
 
 
