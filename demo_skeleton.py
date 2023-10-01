@@ -328,8 +328,9 @@ def main():
         # keypoint[0][i] = a np.array containing 1 set of keypoints of one person, in one frame
 
         print('\nkeypoints shape: ', keypoint.shape) # (num of tracked person, 72, 17, 2)
-        print('keypoints[0] shape: ', keypoint[0].shape) # (72, 17, 2)
-        print('keypoints[0][0] shape: ', keypoint[0][0].shape) # (17, 2)
+        # print('keypoints[0] shape: ', keypoint[0].shape) # (72, 17, 2)
+        # print('keypoints[0][0] shape: ', keypoint[0][0].shape) # (17, 2)
+        # print('keypoints_score: ', keypoint_score.shape) # (2, 72, 17)
 
         # fake_anno type = dict
         fake_anno['keypoint'] = keypoint

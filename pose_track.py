@@ -12,6 +12,8 @@ from pathlib import Path
 import os
 import glob
 import sys
+import mmcv
+
 
 from yolov7.utils.datasets import letterbox
 from yolov7.utils.general import check_img_size, non_max_suppression, scale_coords, non_max_suppression_kpt
@@ -21,6 +23,8 @@ from yolov7.utils.torch_utils import TracedModel
 
 from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
+
+from pyskl.apis import inference_recognizer, init_recognizer
 
 # Parameters
 img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
@@ -165,6 +169,31 @@ class LoadWebcam:  # webcam
     def __len__(self):
         return 0  # 1E12 frames = 32 streams at 30 FPS for 30 years
 
+#------------------------------------------------------------------------------------------------
+def GCN(fake_anno, GCN_model, label_map):
+
+    # config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xsub_hrnet/j.py')
+    # config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+    # # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
+    # GCN_model = init_recognizer(config, '.cache/j_6633e6c4.pth', device)
+    # # args.label_map = tools/data/label_map/nturgbd_120.txt
+    # # Load label_map
+    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+
+    # fake_anno = dict(
+    #     frame_dir='',
+    #     label=-1,
+    #     img_shape=(h, w),
+    #     original_shape=(h, w),
+    #     start_index=0,
+    #     modality='Pose',
+    #     total_frames=num_frame)
+
+    results = inference_recognizer(GCN_model, fake_anno)
+    action_label = label_map[results[0][0]]
+
+    return action_label
+
 #--------------------------------------------------------------------------------------------
 def output_to_keypoint_and_detections(output):
     # Convert model output to target format [batch_id, class_id, x, y, w, h, conf]
@@ -198,9 +227,9 @@ def detect():
     imgsz = 640
 
     # source = '0'
-    source = './video/ntu_sample.avi'
+    # source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
-    # source = './video/breakdance.mp4'
+    source = './video/breakdance.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -236,17 +265,37 @@ def detect():
 
     tracker = BoTSORT(opt, frame_rate=30.0)
 
+    #-------------------Action Recognition Model Initialization----------------------------
+    num_input_to_GCN = 10
+
+    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xsub_hrnet/j.py')
+    config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+    # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
+    GCN_model = init_recognizer(config, '.cache/j_6633e6c4.pth', device)
+    # args.label_map = tools/data/label_map/nturgbd_120.txt
+    # Load label_map
+    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+
+    fake_anno = dict(
+        frame_dir='',
+        label=-1,
+        img_shape=(0, 0),
+        # original_shape=(h, w),
+        start_index=0,
+        modality='Pose',
+        total_frames=num_input_to_GCN)
+    #--------------------------------------------------------------------------------------
+
     # Run inference
     if device.type != 'cpu':
-        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
+        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
 
     start_time = time.time()
-    
-    input_to_GCN = []
-    # add one sub-list to input_toGCN for this one frame
-    temp_dict = dict() # need this because output of id is not in number order
 
-    # frame_number = 0
+    # add one sub-list to input_toGCN for this one frame
+    keypoints_dict = dict() # need this because output of id is not in number order
+    keypoints_score_dict = dict()
+
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
         # img: numpy array (384, 640, 3)
         #--------------------------------------------------------------
@@ -280,6 +329,7 @@ def detect():
         nimg = img[0].permute(1, 2, 0) * 255
         nimg = nimg.cpu().numpy().astype(np.uint8)
         # # nimg: numpy array (384, 640, 3)
+        h, w, _ = nimg.shape
 
         #------------------------------------------------------------------------- 
         #--------------------keypoints visualization------------------------------
@@ -302,75 +352,57 @@ def detect():
 
         # # input_to_GCN
         # # add one sub-list to input_toGCN for this one frame
-        # temp_dict = dict() # need this because output of id is not in number order
+        # keypoints_dict = dict() # need this because output of id is not in number order
 
         for t in online_targets:
             tlwh = t.tlwh # used for filtering out small boxes
             tlbr = t.tlbr # bbox coordinates
             tid = t.track_id # a number id for each tracked person, tpye: int
-            # tcls = t.cls # class, here = 0.0, because it is always a person class, type: numpy.float32
 
             keypoints = []
+            keypoints_score = []
             steps = 3
             num_keypoints = len(t.cls) // steps
 
             for i in range(num_keypoints):
                 x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
                 keypoints.append([x_coord, y_coord])
+                keypoints_score.append(t.cls[steps * i + 2])
 
             if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
                 online_tlwhs.append(tlwh)
                 online_ids.append(tid)
                 online_scores.append(t.score)
-                # online_cls.append(t.cls)
 
-                # # save results
-                # results.append(
-                #     f"{i + 1},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},-1,-1,-1\n"
-                # )
-                if tid in temp_dict:
-                    temp_dict[tid].append(keypoints) # add keypoint to dict with its associated id
+                if tid in keypoints_dict:
+                    keypoints_dict[tid].append(keypoints) # add keypoint to dict with its associated id
+                    keypoints_score_dict[tid].append(keypoints_score)
                 else:
-                    temp_dict[tid] = [keypoints]
+                    keypoints_dict[tid] = [keypoints]
+                    keypoints_score_dict[tid] = [keypoints_score]
 
-                # print('id: ', tid)
-                # if opt.hide_labels_name:
-                #     label = f'{tid}, {int(tcls)}'
-                # else:
-                #     label = f'{tid}, {names[int(tcls)]}'
-                # label = f'{tid}, {int(tcls)}'
                 label = f'{tid}'
                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-                # plot_skeleton_kpts(nimg, keypoints, 3)
         
-        # timer.toc()
-        # text_scale = 2
-        # fps=1. / timer.average_time
-        # cv2.putText(nimg, 'fps: %.2f' % fps,
-        #         (0, int(15 * text_scale)), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), thickness=2)
-        
-        # Stream results
+        for id in online_ids:
+            num_frame_of_this_id = len(keypoints_score_dict[id])
+
+            if num_frame_of_this_id >= num_input_to_GCN:
+                fake_anno['keypoint'] = np.array([keypoints_dict[id]])
+                fake_anno['keypoint_score'] = np.array([keypoints_score_dict[id]])
+                fake_anno['img_shape'] = (h, w)
+
+                action_label = GCN(fake_anno, GCN_model, label_map)
+                print('The tracked ID is: ', id, ' and its action label is: ', action_label)
+                keypoints_dict[id].clear()
+                keypoints_score_dict[id].clear()
+            else:
+                continue
+
+
         cv2.imshow('', nimg)
         cv2.waitKey(1)  # 1 millisecond
-        # frame_number += 1
         #---------------------------------------------------------------------
-    
-    # feed each tracked person to GCN, one at a time
-    # number of inputs = number of tracked ID
-    for id in online_ids:
-        input to GCN (np.array(temp_dict[id]))
-    #     keypoints_after_tracked = []
-
-    #     for id in online_ids:
-    #         keypoints_after_tracked.append(temp_dict[id]) # temp_dict[id] type is np.array
-        
-
-    #     input_to_GCN.append(keypoints_after_tracked)
-
-    # input_to_GCN = np.array(input_to_GCN)
-    # print('input_to_GCN shape: ', input_to_GCN.shape)
-
-
 
     end_time = time.time()
     execution_time = end_time - start_time
