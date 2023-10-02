@@ -387,6 +387,13 @@ def detect():
         for id in online_ids:
             num_frame_of_this_id = len(keypoints_score_dict[id])
 
+            # how to use multiprocessing here?
+            #       run 2 id at the same time, if there are 2 id --> num_frame_of_this_id >= num_input_to_GCN
+            # ex:
+            #   process 1:
+            #       for index in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
+            #   process 2:
+            #       for index + N in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
             if num_frame_of_this_id >= num_input_to_GCN:
                 fake_anno['keypoint'] = np.array([keypoints_dict[id]])
                 fake_anno['keypoint_score'] = np.array([keypoints_score_dict[id]])
