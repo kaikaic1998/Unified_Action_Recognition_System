@@ -83,7 +83,7 @@ class LoadImages:  # for inference
                     ret_val, img0 = self.cap.read()
 
             self.frame += 1
-            print(f'proccessing video frame {self.frame} out of {self.nframes}')
+            # print(f'proccessing video frame {self.frame} out of {self.nframes}')
 
         else:
             # Read image
@@ -227,9 +227,10 @@ def detect():
     imgsz = 640
 
     # source = '0'
-    # source = './video/ntu_sample.avi'
+    # source = './video/palace.mp4'
+    source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
-    source = './video/breakdance.mp4'
+    # source = './video/breakdance.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -295,6 +296,8 @@ def detect():
     # add one sub-list to input_toGCN for this one frame
     keypoints_dict = dict() # need this because output of id is not in number order
     keypoints_score_dict = dict()
+    action_label_dict = dict()
+    action_label = ''
 
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
         # img: numpy array (384, 640, 3)
@@ -381,31 +384,34 @@ def detect():
                     keypoints_dict[tid] = [keypoints]
                     keypoints_score_dict[tid] = [keypoints_score]
 
-                label = f'{tid}'
+                action_label_dict[tid] = action_label
+
+                # how to use multiprocessing here?
+                #       run 2 id at the same time, if there are 2 id --> num_frame_of_this_id >= num_input_to_GCN
+                # ex:
+                #   process 1:
+                #       for index in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
+                #   process 2:
+                #       for index + N in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
+                num_frame_of_this_id = len(keypoints_score_dict[tid])
+                
+                if num_frame_of_this_id >= num_input_to_GCN: # this doesn't work
+                # because GCN can't predict correctly at "real-time" while clearing keypoints_dict everytime after one prediction
+                # need to implement queue/deque
+                # so GCN is constantly predicting wit a fixed number of frames
+                # however, doesn't have to predict every frame, because it slows down the program, maybe every 10 frame or something?
+                #   put below into a def function, set a counter, every 10 loops of dataset call this function once, then reset counter
+                #   every time call the GCN function, call the GCN for all id in the online_id list for one perticular frame
+                    fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
+                    fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
+                    fake_anno['img_shape'] = (h, w)
+
+                    action_label = GCN(fake_anno, GCN_model, label_map)
+                    keypoints_dict[tid].clear() # this doesn't work
+                    keypoints_score_dict[tid].clear() # this doesn't work
+
+                label = f'{tid}, {action_label_dict[tid]}'
                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-        
-        for id in online_ids:
-            num_frame_of_this_id = len(keypoints_score_dict[id])
-
-            # how to use multiprocessing here?
-            #       run 2 id at the same time, if there are 2 id --> num_frame_of_this_id >= num_input_to_GCN
-            # ex:
-            #   process 1:
-            #       for index in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
-            #   process 2:
-            #       for index + N in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
-            if num_frame_of_this_id >= num_input_to_GCN:
-                fake_anno['keypoint'] = np.array([keypoints_dict[id]])
-                fake_anno['keypoint_score'] = np.array([keypoints_score_dict[id]])
-                fake_anno['img_shape'] = (h, w)
-
-                action_label = GCN(fake_anno, GCN_model, label_map)
-                print('The tracked ID is: ', id, ' and its action label is: ', action_label)
-                keypoints_dict[id].clear()
-                keypoints_score_dict[id].clear()
-            else:
-                continue
-
 
         cv2.imshow('', nimg)
         cv2.waitKey(1)  # 1 millisecond
@@ -414,7 +420,8 @@ def detect():
     end_time = time.time()
     execution_time = end_time - start_time
     print('time spent on inference: ', round(execution_time, 2))
-    print('fps: ', round(84/execution_time, 2))
+    print(len(dataset))
+    print('fps: ', round(73/execution_time, 2))
 
 
 if __name__ == '__main__':
