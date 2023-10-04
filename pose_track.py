@@ -228,9 +228,10 @@ def detect():
 
     # source = '0'
     # source = './video/palace.mp4'
-    source = './video/ntu_sample.avi'
+    # source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
     # source = './video/breakdance.mp4'
+    source = './video/human_fall_2.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -269,10 +270,11 @@ def detect():
     #-------------------Action Recognition Model Initialization----------------------------
     num_input_to_GCN = 10
 
-    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xsub_hrnet/j.py')
+    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
-    GCN_model = init_recognizer(config, '.cache/j_6633e6c4.pth', device)
+    #                 = stgcnpp_ntu120_xsub_j_6633e6c4.pth
+    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
     # args.label_map = tools/data/label_map/nturgbd_120.txt
     # Load label_map
     label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
@@ -404,6 +406,10 @@ def detect():
                 #   every time call the GCN function, call the GCN for all id in the online_id list for one perticular frame
                     fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
                     fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
+                    # print(np.array(keypoints_dict[1]).shape)
+                    # print(np.array(keypoints_dict[2]).shape)
+                    # fake_anno['keypoint'] = np.array([np.array(keypoints_dict[1]), np.array(keypoints_dict[2])])
+                    # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[1], keypoints_score_dict[2]])
                     fake_anno['img_shape'] = (h, w)
 
                     action_label = GCN(fake_anno, GCN_model, label_map)
