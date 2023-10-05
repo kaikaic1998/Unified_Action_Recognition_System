@@ -98,7 +98,7 @@ def parse_args():
     parser.add_argument(
         '--short-side',
         type=int,
-        default=480,
+        default=384,
         help='specify the short-side length of the image')
     args = parser.parse_args()
     return args
@@ -229,7 +229,7 @@ def main():
     args = parse_args()
 
     # args.video = video/breakdance.mp4
-    # args.short_side = 480 (default set to 480)
+    # args.short_side = 480 (default set to 384)
     frame_paths, original_frames = frame_extraction(args.video, args.short_side)
     # frame_paths = all the temp stored images directories extracted from the video
     # original_frames = a list containing all images in form of list
@@ -243,6 +243,7 @@ def main():
 
     # run human keypoints from detected human with bbox
     pose_results = pose_inference(args, frame_paths, det_results)
+    # print('\npose_results: ', pose_results[0][0][keypoints])
     torch.cuda.empty_cache()
     # pose_results type = list
     # list lentgh = number of frames
@@ -264,7 +265,7 @@ def main():
     # num_frame = number of frames obtained from the video
     num_frame = len(frame_paths)
     
-    # h = 480, w = 854
+    # h = 384, w = 640
     h, w, _ = original_frames[0].shape
 
     # skeleton action recognition config file path
@@ -327,7 +328,9 @@ def main():
         # keypoint[0][i] length = 17 (one set of keypoints)
         # keypoint[0][i] = a np.array containing 1 set of keypoints of one person, in one frame
 
+
         print('\nkeypoints shape: ', keypoint.shape) # (num of tracked person, 72, 17, 2)
+        print('keypoints score shape: ', keypoint_score.shape) # (num of tracked person, 72, 17)
         # print('keypoints[0] shape: ', keypoint[0].shape) # (72, 17, 2)
         # print('keypoints[0][0] shape: ', keypoint[0][0].shape) # (17, 2)
         # print('keypoints_score: ', keypoint_score.shape) # (2, 72, 17)
@@ -335,6 +338,13 @@ def main():
         # fake_anno type = dict
         fake_anno['keypoint'] = keypoint
         fake_anno['keypoint_score'] = keypoint_score
+
+        # file = open('text1.txt', 'w')
+        # file.write(str(fake_anno['keypoint']))
+        # file.write('\n')
+        # file.write(str(fake_anno['keypoint_score']))
+        # file.close()
+
     else:
         num_person = max([len(x) for x in pose_results])
         # Current PoseC3D models are trained on COCO-keypoints (17 keypoints)

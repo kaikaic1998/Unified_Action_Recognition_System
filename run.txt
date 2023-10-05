@@ -22,3 +22,5 @@ py demo_skeleton.py video/ntu_sample.avi video/demo.mp4 --config configs/stgcn++
 py demo_skeleton.py video/tennis.mp4 video/demo.mp4 --config configs/stgcn++/stgcn++_ntu120_xsub_hrnet/j.py --checkpoint http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
 
 py demo_skeleton.py video/ntu_sample.avi video/demo.mp4 --config configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py --checkpoint http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xset_hrnet/j.pth
+
+py demo_skeleton.py video/ntu_sample.avi video/demo.mp4 --config configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py --checkpoint .cache/stgcnpp_ntu120_xset_hrnet.pth

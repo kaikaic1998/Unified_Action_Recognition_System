@@ -13,6 +13,8 @@ import os
 import glob
 import sys
 import mmcv
+from collections import deque
+from collections import defaultdict
 
 
 from yolov7.utils.datasets import letterbox
@@ -268,7 +270,17 @@ def detect():
     tracker = BoTSORT(opt, frame_rate=30.0)
 
     #-------------------Action Recognition Model Initialization----------------------------
-    num_input_to_GCN = 10
+    num_total_frames = 0
+    video = cv2.VideoCapture(source)
+    while(True):
+        ret, frame = video.read()
+        if ret:
+            num_total_frames += 1
+        else:
+            break
+    video.release()
+
+    num_input_to_GCN = 20
 
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
@@ -299,6 +311,7 @@ def detect():
     keypoints_dict = dict() # need this because output of id is not in number order
     keypoints_score_dict = dict()
     action_label_dict = dict()
+    online_ids = defaultdict(int)
     action_label = ''
 
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
@@ -345,27 +358,24 @@ def detect():
         #------------------------------------------------------------------------- 
         #--------------------keypoints visualization------------------------------
 
-        #---------------------------------------------------------------------
-        # tracker operations
+        #-------------------------------tracker operations--------------------------------------
         # image tpye for tracker should be numpy array, in format of (height, length, 3)
         online_targets = tracker.update(detections, nimg)
 
         online_tlwhs = []
-        online_ids = []
+        # online_ids = []
         online_scores = []
         # online_cls = []
-
-        # # input_to_GCN
-        # # add one sub-list to input_toGCN for this one frame
-        # keypoints_dict = dict() # need this because output of id is not in number order
 
         for t in online_targets:
             tlwh = t.tlwh # used for filtering out small boxes
             tlbr = t.tlbr # bbox coordinates
             tid = t.track_id # a number id for each tracked person, tpye: int
 
+            #-----------------keypoints and scores for one tracked person in this one frame--------------
             keypoints = []
             keypoints_score = []
+
             steps = 3
             num_keypoints = len(t.cls) // steps
 
@@ -373,48 +383,40 @@ def detect():
                 x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
                 keypoints.append([x_coord, y_coord])
                 keypoints_score.append(t.cls[steps * i + 2])
+            #---------------------------------------------------------------------------------------------
 
             if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
                 online_tlwhs.append(tlwh)
-                online_ids.append(tid)
+                # online_ids.append(tid)
+                online_ids[tid] += 1
                 online_scores.append(t.score)
 
-                if tid in keypoints_dict:
-                    keypoints_dict[tid].append(keypoints) # add keypoint to dict with its associated id
-                    keypoints_score_dict[tid].append(keypoints_score)
-                else:
-                    keypoints_dict[tid] = [keypoints]
-                    keypoints_score_dict[tid] = [keypoints_score]
+                if online_ids[tid] >= 3:
+                    online_ids[tid] = 0
+                    if tid in keypoints_dict: # if it is a new tracking
+                        deque_len_of_this_id = len(keypoints_score_dict[tid])
+                        print('deque_len_of_this_id: ', deque_len_of_this_id)
 
+                        if deque_len_of_this_id >= num_input_to_GCN:
+                            keypoints_dict[tid].popleft()
+                            keypoints_score_dict[tid].popleft()
+
+                            keypoints_dict[tid].append(keypoints)
+                            keypoints_score_dict[tid].append(keypoints_score)
+
+                            fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
+                            fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
+                            fake_anno['img_shape'] = (h, w)
+                            action_label = GCN(fake_anno, GCN_model, label_map)
+                        else:
+                            keypoints_dict[tid].append(keypoints)
+                            keypoints_score_dict[tid].append(keypoints_score)
+                    else: # if the tracking is already exist
+                        keypoints_dict[tid] = deque([keypoints])
+                        keypoints_score_dict[tid] = deque([keypoints_score])
+
+                # # action label for every tracked person
                 action_label_dict[tid] = action_label
-
-                # how to use multiprocessing here?
-                #       run 2 id at the same time, if there are 2 id --> num_frame_of_this_id >= num_input_to_GCN
-                # ex:
-                #   process 1:
-                #       for index in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
-                #   process 2:
-                #       for index + N in online_ids: if --> num_frame_of_this_id >= num_input_to_GCN
-                num_frame_of_this_id = len(keypoints_score_dict[tid])
-                
-                if num_frame_of_this_id >= num_input_to_GCN: # this doesn't work
-                # because GCN can't predict correctly at "real-time" while clearing keypoints_dict everytime after one prediction
-                # need to implement queue/deque
-                # so GCN is constantly predicting wit a fixed number of frames
-                # however, doesn't have to predict every frame, because it slows down the program, maybe every 10 frame or something?
-                #   put below into a def function, set a counter, every 10 loops of dataset call this function once, then reset counter
-                #   every time call the GCN function, call the GCN for all id in the online_id list for one perticular frame
-                    fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
-                    fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
-                    # print(np.array(keypoints_dict[1]).shape)
-                    # print(np.array(keypoints_dict[2]).shape)
-                    # fake_anno['keypoint'] = np.array([np.array(keypoints_dict[1]), np.array(keypoints_dict[2])])
-                    # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[1], keypoints_score_dict[2]])
-                    fake_anno['img_shape'] = (h, w)
-
-                    action_label = GCN(fake_anno, GCN_model, label_map)
-                    keypoints_dict[tid].clear() # this doesn't work
-                    keypoints_score_dict[tid].clear() # this doesn't work
 
                 label = f'{tid}, {action_label_dict[tid]}'
                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
@@ -426,8 +428,7 @@ def detect():
     end_time = time.time()
     execution_time = end_time - start_time
     print('time spent on inference: ', round(execution_time, 2))
-    print(len(dataset))
-    print('fps: ', round(73/execution_time, 2))
+    print('fps: ', round(num_total_frames/execution_time, 2))
 
 
 if __name__ == '__main__':
