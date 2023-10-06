@@ -8,7 +8,7 @@ from queue import Queue # generally slower than list for iteration
 from collections import deque
 
 def try_deque():
-    deq = deque([999])
+    deq = deque([1, 2])
 
     for i in range(3):
         deq.append(i)
