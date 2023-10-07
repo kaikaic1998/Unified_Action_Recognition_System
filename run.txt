@@ -24,3 +24,9 @@ py demo_skeleton.py video/tennis.mp4 video/demo.mp4 --config configs/stgcn++/stg
 py demo_skeleton.py video/ntu_sample.avi video/demo.mp4 --config configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py --checkpoint http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xset_hrnet/j.pth
 
 py demo_skeleton.py video/ntu_sample.avi video/demo.mp4 --config configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py --checkpoint .cache/stgcnpp_ntu120_xset_hrnet.pth
+
+training: 
+
+# bash dist_train.sh ${CONFIG_FILE} ${NUM_GPUS} [optional arguments]
+# For example: train STGCN++ on NTURGB+D XSub (3D skeleton, Joint Modality) with 1 GPUs, with validation, and test the last and the best (with best validation metric) checkpoint.
+bash dist_train.sh configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py 1 --validate --test-last --test-best

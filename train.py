@@ -21,7 +21,8 @@ from pyskl.utils import collect_env, get_root_logger, mc_off, mc_on, test_port
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a recognizer')
-    parser.add_argument('config', help='train config file path')
+    # parser.add_argument('config', help='train config file path')
+    parser.add_argument('--config', help='train config file path')
     parser.add_argument(
         '--validate',
         action='store_true',
