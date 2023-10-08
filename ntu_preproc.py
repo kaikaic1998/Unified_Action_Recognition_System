@@ -11,7 +11,7 @@ from pyskl.smp import mrlines
 eps = 1e-3
 
 
-def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
+def parse_skeleton_file(ske_name, root='tools/data/nturgb+d_skeletons'):
     ske_file = osp.join(root, ske_name + '.skeleton')
 
     lines = mrlines(ske_file)
@@ -131,11 +131,11 @@ def gen_keypoint_array(body_data):
         return keypoint
 
 
-root = 'nturgb+d_skeletons'
+root = 'tools/data/nturgb+d_skeletons'
 skeleton_files = os.listdir(root)
 names = [x.split('.')[0] for x in skeleton_files]
 names.sort()
-missing = mrlines('ntu120_missing.txt')
+missing = mrlines('tools/data/ntu120_missing.txt')
 missing = set(missing)
 names = [x for x in names if x not in missing]
 
@@ -188,7 +188,7 @@ if extended:
     xset_val = [name for name in names if int(name.split('S')[1][:3]) % 2 == 1]
     split = dict(xsub_train=xsub_train, xsub_val=xsub_val, xset_train=xset_train, xset_val=xset_val)
     annotations = [anno_dict[name] for name in names]
-    dump(dict(split=split, annotations=annotations), 'ntu120_3danno.pkl')
+    dump(dict(split=split, annotations=annotations), 'tools/data/ntu120_3danno.pkl')
 
 names = [name for name in names if int(name.split('A')[-1]) <= 60]
 xsub_train = [name for name in names if int(name.split('P')[1][:3]) in training_subjects]
@@ -197,4 +197,4 @@ xview_train = [name for name in names if 'C001' not in name]
 xview_val = [name for name in names if 'C001' in name]
 split = dict(xsub_train=xsub_train, xsub_val=xsub_val, xview_train=xview_train, xview_val=xview_val)
 annotations = [anno_dict[name] for name in names]
-dump(dict(split=split, annotations=annotations), 'ntu60_3danno.pkl')
+dump(dict(split=split, annotations=annotations), 'tools/data/ntu60_3danno.pkl')

@@ -9,7 +9,7 @@ model = dict(
     cls_head=dict(type='GCNHead', num_classes=120, in_channels=256))
 
 dataset_type = 'PoseDataset'
-ann_file = 'data/nturgbd/ntu120_hrnet.pkl'
+ann_file = 'tools/data/ntu120_hrnet.pkl'
 train_pipeline = [
     dict(type='PreNormalize2D'),
     dict(type='GenSkeFeat', dataset='coco', feats=['j']),

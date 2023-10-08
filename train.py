@@ -60,8 +60,10 @@ def parse_args():
 
 def main():
     args = parse_args()
+    print('args: ', args)
 
     cfg = Config.fromfile(args.config)
+    # print('cfg: ', cfg)
 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -76,7 +78,7 @@ def main():
     if not hasattr(cfg, 'dist_params'):
         cfg.dist_params = dict(backend='nccl')
 
-    init_dist(args.launcher, **cfg.dist_params)
+    # init_dist(args.launcher, **cfg.dist_params)
     rank, world_size = get_dist_info()
     cfg.gpu_ids = range(world_size)
 
@@ -123,6 +125,7 @@ def main():
     if dv(torch.__version__) >= dv('2.0.0') and args.compile:
         model = torch.compile(model)
 
+    print('cfg.data.train: ', cfg.data.train)
     datasets = [build_dataset(cfg.data.train)]
 
     cfg.workflow = cfg.get('workflow', [('train', 1)])
