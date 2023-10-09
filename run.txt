@@ -30,3 +30,5 @@ training:
 # bash dist_train.sh ${CONFIG_FILE} ${NUM_GPUS} [optional arguments]
 # For example: train STGCN++ on NTURGB+D XSub (3D skeleton, Joint Modality) with 1 GPUs, with validation, and test the last and the best (with best validation metric) checkpoint.
 bash dist_train.sh configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py 1 --validate --test-last --test-best
+
+py try_train.py --config configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py

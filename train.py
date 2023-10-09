@@ -155,10 +155,10 @@ def main():
             retry -= 1
         assert retry >= 0, 'Failed to launch memcached. '
 
-    dist.barrier()
+    # dist.barrier()
 
     train_model(model, datasets, cfg, validate=args.validate, test=test_option, timestamp=timestamp, meta=meta)
-    dist.barrier()
+    # dist.barrier()
 
     if rank == 0 and memcached:
         mc_off()
