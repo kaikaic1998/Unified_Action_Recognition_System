@@ -256,6 +256,7 @@ def detect():
 
     # Set Dataloader
     cudnn.benchmark = True  # set True to speed up constant image size inference
+    
     if source == '0':
         dataset = LoadWebcam(img_size=imgsz, stride=stride) # sources = '0' means webcam
     else:

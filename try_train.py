@@ -110,11 +110,12 @@ def train_model(model,
     find_unused_parameters = cfg.get('find_unused_parameters', True)
     # Sets the `find_unused_parameters` parameter in
     # torch.nn.parallel.DistributedDataParallel
-    model = MMDistributedDataParallel(
-        model.cuda(),
-        device_ids=[torch.cuda.current_device()],
-        broadcast_buffers=False,
-        find_unused_parameters=find_unused_parameters)
+    # model = MMDistributedDataParallel(
+    #     model.cuda(),
+    #     device_ids=[torch.cuda.current_device()],
+    #     broadcast_buffers=False,
+    #     find_unused_parameters=find_unused_parameters)
+    # model = model.to(torch.device('cuda:0'))
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
@@ -163,7 +164,7 @@ def train_model(model,
 
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
 
-    dist.barrier()
+    # dist.barrier()
     time.sleep(2)
 
     if test['test_last'] or test['test_best']:
@@ -274,8 +275,8 @@ def main():
     args = parse_args()
     print('args: ', args)
 
+    # config = configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py
     cfg = Config.fromfile(args.config)
-    # print('cfg: ', cfg)
 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -333,7 +334,11 @@ def main():
     meta['config_name'] = osp.basename(args.config)
     meta['work_dir'] = osp.basename(cfg.work_dir.rstrip('/\\'))
 
-    model = build_model(cfg.model)
+    print('\nmodel: ', cfg.model)
+    model = build_model(cfg.model) # after this line, model is the actual model structure
+    # can just fine-tune the last classification layer
+    print('\nmodel after: ', model, '\n')
+
     if dv(torch.__version__) >= dv('2.0.0') and args.compile:
         model = torch.compile(model)
 
@@ -349,6 +354,7 @@ def main():
             pyskl_version=__version__ + get_git_hash(digits=7),
             config=cfg.pretty_text)
 
+    #                              False                       False
     test_option = dict(test_last=args.test_last, test_best=args.test_best)
 
     default_mc_cfg = ('localhost', 22077)

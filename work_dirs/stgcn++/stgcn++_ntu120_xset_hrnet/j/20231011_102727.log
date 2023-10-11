@@ -1,4 +1,4 @@
-2023-10-09 11:57:57,156 - pyskl - INFO - Environment info:
+2023-10-11 10:27:28,653 - pyskl - INFO - Environment info:
 ------------------------------------------------------------
 sys.platform: win32
 Python: 3.11.4 (tags/v3.11.4:d2340ef, Jun  7 2023, 05:45:37) [MSC v.1934 64 bit (AMD64)]
@@ -28,10 +28,10 @@ OpenCV: 4.7.0
 MMCV: 1.5.0
 MMCV Compiler: MSVC 193632537
 MMCV CUDA Compiler: 11.8
-pyskl: 0.1.0+cc1b6b7
+pyskl: 0.1.0+99c84a2
 ------------------------------------------------------------
 
-2023-10-09 11:57:57,218 - pyskl - INFO - Config: model = dict(
+2023-10-11 10:27:28,715 - pyskl - INFO - Config: model = dict(
     type='RecognizerGCN',
     backbone=dict(
         type='STGCN',
@@ -128,5 +128,51 @@ work_dir = './work_dirs/stgcn++/stgcn++_ntu120_xset_hrnet/j'
 dist_params = dict(backend='nccl')
 gpu_ids = range(0, 1)
 
-2023-10-09 11:57:57,223 - pyskl - INFO - Set random seed to 1651016722, deterministic: False
-2023-10-09 11:58:01,798 - pyskl - INFO - 54468 videos remain after valid thresholding
+2023-10-11 10:27:28,721 - pyskl - INFO - Set random seed to 1730568170, deterministic: False
+2023-10-11 10:27:33,438 - pyskl - INFO - 54468 videos remain after valid thresholding
+2023-10-11 10:27:33,509 - pyskl - INFO - Start running, host: Kainian@DESKTOP-76MCF01, work_dir: C:\Users\Kainian\Desktop\WorkSpace\new_project\work_dirs\stgcn++\stgcn++_ntu120_xset_hrnet\j
+2023-10-11 10:27:33,509 - pyskl - INFO - Hooks will be executed in the following order:
+before_run:
+(VERY_HIGH   ) CosineAnnealingLrUpdaterHook       
+(NORMAL      ) CheckpointHook                     
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+before_train_epoch:
+(VERY_HIGH   ) CosineAnnealingLrUpdaterHook       
+(NORMAL      ) DistSamplerSeedHook                
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+before_train_iter:
+(VERY_HIGH   ) CosineAnnealingLrUpdaterHook       
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_train_iter:
+(ABOVE_NORMAL) OptimizerHook                      
+(NORMAL      ) CheckpointHook                     
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+after_train_epoch:
+(NORMAL      ) CheckpointHook                     
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+before_val_epoch:
+(NORMAL      ) DistSamplerSeedHook                
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+before_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_epoch:
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+after_run:
+(VERY_LOW    ) TextLoggerHook                     
+ -------------------- 
+2023-10-11 10:27:33,512 - pyskl - INFO - workflow: [('train', 1)], max: 16 epochs
+2023-10-11 10:27:33,512 - pyskl - INFO - Checkpoints will be saved to C:\Users\Kainian\Desktop\WorkSpace\new_project\work_dirs\stgcn++\stgcn++_ntu120_xset_hrnet\j by HardDiskBackend.
