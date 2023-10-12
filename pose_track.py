@@ -340,7 +340,7 @@ def detect():
         with torch.no_grad():
             # output = all keypoints in 1 frame
             # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
-            output, detections = output_to_keypoint_and_detections(output)
+            targets, detections = output_to_keypoint_and_detections(output)
             # detections = output_to_keypoint_and_detections(output)
             # output and detections types are np.array
 
