@@ -1,5 +1,6 @@
 pretrained/
 tools/data/
+test_image/
 
 *.ipynb
 *.pkl

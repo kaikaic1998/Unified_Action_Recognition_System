@@ -6,6 +6,8 @@ import time
 from queue import Queue # generally slower than list for iteration
 # because it includes additional overhead for managing thread safety and synchronization, which is not present in a regular list
 from collections import deque
+import pathlib
+from torchvision import datasets
 
 def try_deque():
     deq = deque([1, 2])
@@ -19,7 +21,7 @@ def try_deque():
         print(element)
     deq = np.array(deq)
     print(deq.shape)
-try_deque()
+# try_deque()
 
 def queue_vs_list():
     start_time = time.time()
@@ -96,3 +98,11 @@ def queue_vs_list():
 #     end_time = time.time()
 #     execution_time = end_time - start_time
 #     print('time spent: ', round(execution_time, 4))
+
+dataset = datasets.ImageFolder(root = './test_image')
+print('\ndataset.class_to_idx: ', dataset.class_to_idx)
+print('dataset.classes:, ', dataset.classes)
+print('dataset.root: ', dataset.root)
+print('len(dataset)', len(dataset))
+print(dataset[0])
+print(type(dataset[0]))

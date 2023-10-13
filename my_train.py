@@ -9,7 +9,8 @@ from numpy import random
 import numpy as np
 from threading import Thread
 import time
-from torchvision import transforms
+from torchvision import transforms, datasets
+from torch.utils.data import DataLoader, Dataset, random_split
 from pathlib import Path
 import os
 import glob
@@ -17,7 +18,7 @@ import sys
 import mmcv
 from collections import deque
 from collections import defaultdict
-
+import pathlib
 
 from yolov7.utils.datasets import letterbox
 from yolov7.utils.general import check_img_size, non_max_suppression, scale_coords, non_max_suppression_kpt
@@ -236,6 +237,7 @@ def visualize_dataset():
     # source = './video/tennis.mp4'
     # source = './video/breakdance.mp4'
     source = './video/human_fall_2.mp4'
+    # source = './video/'
 
     # Initialize
     device = torch.device('cuda')
@@ -534,6 +536,34 @@ def detect():
     print('time spent on inference: ', round(execution_time, 2))
     print('fps: ', round(num_total_frames/execution_time, 2))
 
+class video_dataset(Dataset):
+    def __init__(self, path):
+        self.path = path
+        self.paths = list(pathlib.Path(path).glob("*/*.*"))
+        self.classes, self.class_to_idx = self.find_class(path)
+
+        self.list_of_keypoints = video_folder_to_keypoints()
+    
+    def find_class(self, class_path):
+            class_names = os.listdir(class_path)
+            class_to_idx = {name: i for i, name in enumerate(class_names)}
+            return class_names, class_to_idx
+    
+    # def video_folder_to_keypoints(path):
+    #     call yolo7 pose to generate keypoints for all videos
+    #     return a dictionary of {class0:keypoints, class1:keypoints}
+        
+    #     return dictionary
+    
+    def __getitem__(self, index):
+        class_of_this_index = self.class_to_idx[os.path.basename(os.path.dirname(self.paths[index]))]
+        
+        # return (skeleton of this video, class_of_this_index)
+        return (self.paths[index], class_of_this_index)
+    
+    def __len__(self):
+        return len(self.paths)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
@@ -577,43 +607,51 @@ if __name__ == '__main__':
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
 
-    with torch.no_grad():
+    # with torch.no_grad():
         # detect()
-        visualize_dataset()
+        # visualize_dataset
+
+    dataset = video_dataset('./dataset/')
+    print('\ndataset.class_to_idx: ', dataset.class_to_idx)
+    print('dataset.classes:, ', dataset.classes)
+    print('dataset.path: ', dataset.path)
+    print('dataset.paths: ', dataset.paths)
+    print('len(dataset)', len(dataset))
+    print(dataset[2])
+
+    #---------------------------for training part------------------------------
+    # device = torch.device('cuda')
+
+    # config = Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
+
+    # config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+
+    # if config.get('cudnn_benchmark', False):
+    #     torch.backends.cudnn.benchmark = True
+
+    # criterion = nn.CrossEntropyLoss()
+
+    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    # # last layer:
+    # # 
+    # # (cls_head): GCNHead(
+    # #     (loss_cls): CrossEntropyLoss()
+    # #     (fc_cls): Linear(in_features=256, out_features=120, bias=True)
+    # #   )
+    # #
+    # # loss function is the cross entropy loss
+
+    # # True = not freeze parameters
+    # # False = freeze parameters
+    # for param in GCN_model.parameters():
+    #     param.requires_grad = False 
+
+    # # print(GCN_model.cls_head)
+    # # print(GCN_model.cls_head.__dict__)
+    # # print(GCN_model.cls_head.in_c) # 256
+    # # print(GCN_model.cls_head.num_classes) # 120
+    # # print(GCN_model.cls_head.fc_cls) # Linear(in_features=256, out_features=120, bias=True)
     
-
-    device = torch.device('cuda')
-
-    config = Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
-
-    config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-
-    if config.get('cudnn_benchmark', False):
-        torch.backends.cudnn.benchmark = True
-
-    criterion = nn.CrossEntropyLoss()
-
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-    # last layer:
-    # 
-    # (cls_head): GCNHead(
-    #     (loss_cls): CrossEntropyLoss()
-    #     (fc_cls): Linear(in_features=256, out_features=120, bias=True)
-    #   )
-    #
-    # loss function is the cross entropy loss
-
-    # True = not freeze parameters
-    # False = freeze parameters
-    for param in GCN_model.parameters():
-        param.requires_grad = False 
-
+    # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
     # print(GCN_model.cls_head)
-    # print(GCN_model.cls_head.__dict__)
-    # print(GCN_model.cls_head.in_c) # 256
-    # print(GCN_model.cls_head.num_classes) # 120
-    # print(GCN_model.cls_head.fc_cls) # Linear(in_features=256, out_features=120, bias=True)
-    
-    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    print(GCN_model.cls_head)
-    print('\n', GCN_model.cls_head.fc_cls)
+    # print('\n', GCN_model.cls_head.fc_cls)
