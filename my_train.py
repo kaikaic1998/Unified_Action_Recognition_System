@@ -111,69 +111,6 @@ class LoadImages:  # for inference
     def __len__(self):
         return self.nf  # number of files
 
-class LoadWebcam:  # webcam
-    def __init__(self, img_size=640, stride=32):
-        self.mode = 'stream'
-        self.img_size = img_size
-        self.stride = stride
-
-        self.imgs = [None]
-
-        self.cap = cv2.VideoCapture(0)
-        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS) % 100
-
-        _, self.imgs[0] = self.cap.read()  # guarantee first frame
-
-        thread = Thread(target=self.update, args=([self.cap]), daemon=True)
-        print(f' success ({w}x{h} at {self.fps:.2f} FPS).')
-        thread.start()
-        print('')  # newline
-
-        # check for common shapes
-        s = np.stack([letterbox(x, self.img_size, stride=self.stride)[0].shape for x in self.imgs], 0)  # shapes
-        self.rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
-        if not self.rect:
-            print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
-
-    def update(self, cap):
-        index = 0
-
-        # Read next stream frame in a daemon thread
-        n = 0
-        while cap.isOpened():
-            n += 1
-            # _, self.imgs[index] = cap.read()
-            cap.grab()
-            if n == 4:  # read every 4th frame
-                success, im = cap.retrieve()
-                self.imgs[index] = im if success else self.imgs[index] * 0
-                n = 0
-            time.sleep(1 / self.fps)  # wait time
-
-    def __iter__(self):
-        self.count = -1
-        return self
-
-    def __next__(self):
-        self.count += 1
-        img0 = self.imgs.copy()
-        if cv2.waitKey(1) == ord('q'):  # q to quit
-            self.cap.release()
-            cv2.destroyAllWindows()
-            raise StopIteration
-
-        # Letterbox
-        img = [letterbox(x, self.img_size, auto=self.rect, stride=self.stride)[0] for x in img0]
-        # Stack
-        img = np.stack(img, 0)
-
-        return '0', img, img0, None
-
-    def __len__(self):
-        return 0  # 1E12 frames = 32 streams at 30 FPS for 30 years
-
 #------------------------------------------------------------------------------------------------
 def GCN(fake_anno, GCN_model, label_map):
 
@@ -223,421 +160,349 @@ def output_to_keypoint_and_detections(output):
     return np.array(targets), np.array(detections)
 #---------------------------------------------------------------------------------------------
 
-def get_keypoints_from_all_videos():
-    # add yolov7 folder to path, to add it to the beginning of the module search path
-    # otherwise, yolov7 module will causes "models" not found error
-    sys.path.insert(0, 'yolov7')
+# def init_track_pose():
+#     sys.path.insert(0, 'yolov7')
     
-    # weights = 'yolov7.pt'
-    imgsz = 640
+#     # weights = 'yolov7.pt'
+#     imgsz = 640
 
-    # source = '0'
-    # source = './video/palace.mp4'
-    # source = './video/ntu_sample.avi'
-    # source = './video/tennis.mp4'
-    # source = './video/breakdance.mp4'
-    # source = './video/human_fall_2.mp4'
-    source = './dataset/fall'
+#     device = torch.device('cuda')
 
-    num_total_frames = 0
-    video = cv2.VideoCapture(source)
-    while(True):
-        ret, frame = video.read()
-        if ret:
-            num_total_frames += 1
-        else:
-            break
-    video.release()
+#     # Load model
+#     model_path = './pretrained/yolov7-w6-pose.pt'
 
-    num_input_to_GCN = int(num_total_frames/3) - 6
+#     weigths = torch.load(model_path, map_location=device)
+#     model = weigths['model']
+#     _ = model.float().eval()
 
-    # Initialize
-    device = torch.device('cuda')
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+#     stride = int(model.stride.max())  # model stride
+#     imgsz = check_img_size(imgsz, s=stride)  # check img_size
 
-    # Load model
-    model_path = './pretrained/yolov7-w6-pose.pt'
+#     # model = TracedModel(model, device, imgsz)
 
-    weigths = torch.load(model_path, map_location=device)
-    model = weigths['model']
-    _ = model.float().eval()
+#     if (device.type != 'cpu'): # half = True
+#         model.half()  # to FP16
 
-    stride = int(model.stride.max())  # model stride
-    imgsz = check_img_size(imgsz, s=stride)  # check img_size
+#     # Set Dataloader
+#     cudnn.benchmark = True  # set True to speed up constant image size inference
 
-    # model = TracedModel(model, device, imgsz)
+#     tracker = BoTSORT(opt, frame_rate=30.0)
 
-    if half: # half = True
-        model.half()  # to FP16
+#     # Run inference
+#     if device.type != 'cpu':
+#         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
 
-    # Set Dataloader
-    cudnn.benchmark = True  # set True to speed up constant image size inference
+#     return device, model, tracker, stride, imgsz
+
+# def get_keypoints_from_all_videos(source, device, model, tracker, stride, imgsz):
+#     dataset = LoadImages(source, img_size=imgsz, stride=stride)
+#     num_total_frames = dataset.nframes
+#     num_input_to_GCN = int(num_total_frames/3) - 6
+
+#     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
+
+#     id_list = []
+#     keypoints_dict = dict()
+#     keypoints_score_dict = dict()
+#     action_label_dict = dict()
+#     online_ids = defaultdict(int)
+#     action_label = ''
+
+#     for path, img, im0, vid_cap in dataset: # one dataset = one frame
+#         # img: numpy array (384, 640, 3)
+#         #--------------------------------------------------------------
+#         # change img type from numpy to tensor
+#         # so can feed img to GPU, to speed up inference speed
+#         img = torch.from_numpy(img).to(device)
+#         img = img.half() if (device.type != 'cpu') else img.float()  # uint8 to fp16/32
+#         img /= 255.0  # 0 - 255 to 0.0 - 1.0
+#         if img.ndimension() == 3:
+#             img = img.unsqueeze(0)
+#         img = img.permute(0,3,1,2)
+#         with torch.no_grad():
+#             output, _ = model(img)
+#         #--------------------------------------------------------------
+#         # img: tensor, torch.Size([1, 3, 384, 640])
+
+#         # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
+#             # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
+
+#         # Apply NMS
+#         output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
+
+#         with torch.no_grad():
+#             # output = all keypoints in 1 frame
+#             # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
+#             targets, detections = output_to_keypoint_and_detections(output)
+
+#         # img: tensor, torch.Size([1, 3, 384, 640])
+#         nimg = img[0].permute(1, 2, 0) * 255
+#         nimg = nimg.cpu().numpy().astype(np.uint8)
+#         # # nimg: numpy array (384, 640, 3)
+
+#         # image tpye for tracker should be numpy array, in format of (height, length, 3)
+#         online_targets = tracker.update(detections, nimg)
+
+#         # online_tlwhs = []
+#         # online_ids = []
+#         # online_scores = []
+#         # online_cls = []
+
+#         for t in online_targets:
+#             tlwh = t.tlwh # used for filtering out small boxes
+#             tlbr = t.tlbr # bbox coordinates
+#             tid = t.track_id # a number id for each tracked person, tpye: int
+
+#             #-----------------keypoints and scores for one tracked person in this one frame--------------
+#             keypoints = []
+#             keypoints_score = []
+
+#             steps = 3
+#             num_keypoints = len(t.cls) // steps
+
+#             for i in range(num_keypoints):
+#                 x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
+#                 keypoints.append([x_coord, y_coord])
+#                 keypoints_score.append(t.cls[steps * i + 2])
+#             #---------------------------------------------------------------------------------------------
+
+#             if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
+#                 # online_tlwhs.append(tlwh)
+#                 # online_ids.append(tid)
+#                 online_ids[tid] += 1
+#                 # online_scores.append(t.score)
+
+#                 if online_ids[tid] >= 3:
+#                     online_ids[tid] = 0
+#                     if tid in keypoints_dict: # if it is an existing tracking id
+#                         deque_len_of_this_id = len(keypoints_score_dict[tid])
+#                         print('deque_len_of_this_id: ', deque_len_of_this_id)
+
+#                         if deque_len_of_this_id >= num_input_to_GCN:
+#                             keypoints_dict[tid].popleft()
+#                             keypoints_score_dict[tid].popleft()
+
+#                             keypoints_dict[tid].append(keypoints)
+#                             keypoints_score_dict[tid].append(keypoints_score)
+#                             # fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
+#                             # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
+#                             # fake_anno['img_shape'] = (h, w)
+#                             # action_label = GCN(fake_anno, GCN_model, label_map)
+#                         else:
+#                             keypoints_dict[tid].append(keypoints)
+#                             keypoints_score_dict[tid].append(keypoints_score)
+#                     else: # if the tracking id is new
+#                         id_list.append(tid)
+#                         keypoints_dict[tid] = deque([keypoints])
+#                         keypoints_score_dict[tid] = deque([keypoints_score])
+
+#                 # # action label for every tracked person
+#                 # action_label_dict[tid] = action_label
+
+#                 label = f'{tid}'
+#                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+#         cv2.imshow('', nimg)
+#         cv2.waitKey(1)  # 1 millisecond
+#         #---------------------------------------------------------------------
+
+#     keypoints_from_all_tracking = []
+#     keypoints_score_from_all_tracking = []
+#     for id in id_list:
+#         keypoints_from_all_tracking.append(list(keypoints_dict[id]))
+#         keypoints_score_from_all_tracking.append(list(keypoints_score_dict[id]))
     
-    if source == '0':
-        dataset = LoadWebcam(img_size=imgsz, stride=stride) # sources = '0' means webcam
-    else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride)
+#     return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
-    colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
-
-    tracker = BoTSORT(opt, frame_rate=30.0)
-
-    # Run inference
-    if device.type != 'cpu':
-        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
-
-    id_list = []
-    keypoints_dict = dict()
-    keypoints_score_dict = dict()
-    action_label_dict = dict()
-    online_ids = defaultdict(int)
-    action_label = ''
-
-    for path, img, im0, vid_cap in dataset: # one dataset = one frame
-        # img: numpy array (384, 640, 3)
-        #--------------------------------------------------------------
-        # change img type from numpy to tensor
-        # so can feed img to GPU, to speed up inference speed
-        img = torch.from_numpy(img).to(device)
-        img = img.half() if half else img.float()  # uint8 to fp16/32
-        img /= 255.0  # 0 - 255 to 0.0 - 1.0
-        if img.ndimension() == 3:
-            img = img.unsqueeze(0)
-        img = img.permute(0,3,1,2)
-        with torch.no_grad():
-            output, _ = model(img)
-        #--------------------------------------------------------------
-        # img: tensor, torch.Size([1, 3, 384, 640])
-
-        # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
-            # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
-
-        # Apply NMS
-        output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
-
-        with torch.no_grad():
-            # output = all keypoints in 1 frame
-            # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
-            targets, detections = output_to_keypoint_and_detections(output)
-
-        # img: tensor, torch.Size([1, 3, 384, 640])
-        nimg = img[0].permute(1, 2, 0) * 255
-        nimg = nimg.cpu().numpy().astype(np.uint8)
-        # # nimg: numpy array (384, 640, 3)
-
-        # image tpye for tracker should be numpy array, in format of (height, length, 3)
-        online_targets = tracker.update(detections, nimg)
-
-        # online_tlwhs = []
-        # online_ids = []
-        # online_scores = []
-        # online_cls = []
-
-        for t in online_targets:
-            tlwh = t.tlwh # used for filtering out small boxes
-            tlbr = t.tlbr # bbox coordinates
-            tid = t.track_id # a number id for each tracked person, tpye: int
-
-            #-----------------keypoints and scores for one tracked person in this one frame--------------
-            keypoints = []
-            keypoints_score = []
-
-            steps = 3
-            num_keypoints = len(t.cls) // steps
-
-            for i in range(num_keypoints):
-                x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
-                keypoints.append([x_coord, y_coord])
-                keypoints_score.append(t.cls[steps * i + 2])
-            #---------------------------------------------------------------------------------------------
-
-            if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
-                # online_tlwhs.append(tlwh)
-                # online_ids.append(tid)
-                online_ids[tid] += 1
-                # online_scores.append(t.score)
-
-                if online_ids[tid] >= 3:
-                    online_ids[tid] = 0
-                    if tid in keypoints_dict: # if it is an existing tracking id
-                        deque_len_of_this_id = len(keypoints_score_dict[tid])
-                        print('deque_len_of_this_id: ', deque_len_of_this_id)
-
-                        if deque_len_of_this_id >= num_input_to_GCN:
-                            keypoints_dict[tid].popleft()
-                            keypoints_score_dict[tid].popleft()
-
-                            keypoints_dict[tid].append(keypoints)
-                            keypoints_score_dict[tid].append(keypoints_score)
-                            # fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
-                            # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
-                            # fake_anno['img_shape'] = (h, w)
-                            # action_label = GCN(fake_anno, GCN_model, label_map)
-                        else:
-                            keypoints_dict[tid].append(keypoints)
-                            keypoints_score_dict[tid].append(keypoints_score)
-                    else: # if the tracking id is new
-                        id_list.append(tid)
-                        keypoints_dict[tid] = deque([keypoints])
-                        keypoints_score_dict[tid] = deque([keypoints_score])
-
-                # # action label for every tracked person
-                # action_label_dict[tid] = action_label
-
-                label = f'{tid}'
-                plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-        cv2.imshow('', nimg)
-        cv2.waitKey(1)  # 1 millisecond
-        #---------------------------------------------------------------------
-
-    keypoints_from_all_tracking = []
-    keypoints_score_from_all_tracking = []
-    for id in id_list:
-        keypoints_from_all_tracking.append(list(keypoints_dict[id]))
-        keypoints_score_from_all_tracking.append(list(keypoints_score_dict[id]))
-    
-    return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
-
-def detect():
-    # add yolov7 folder to path, to add it to the beginning of the module search path
-    # otherwise, yolov7 module will causes "models" not found error
-    sys.path.insert(0, 'yolov7')
-    
-    # weights = 'yolov7.pt'
-    imgsz = 640
-
-    # source = '0'
-    # source = './video/palace.mp4'
-    # source = './video/ntu_sample.avi'
-    # source = './video/tennis.mp4'
-    # source = './video/breakdance.mp4'
-    source = './video/human_fall_2.mp4'
-
-    # Initialize
-    device = torch.device('cuda')
-    half = device.type != 'cpu'  # half precision only supported on CUDA
-
-    # Load model
-    model_path = './pretrained/yolov7-w6-pose.pt'
-
-    weigths = torch.load(model_path, map_location=device)
-    model = weigths['model']
-    _ = model.float().eval()
-
-    stride = int(model.stride.max())  # model stride
-    imgsz = check_img_size(imgsz, s=stride)  # check img_size
-
-    # model = TracedModel(model, device, imgsz)
-
-    if half: # half = True
-        model.half()  # to FP16
-
-    # Set Dataloader
-    cudnn.benchmark = True  # set True to speed up constant image size inference
-    
-    if source == '0':
-        dataset = LoadWebcam(img_size=imgsz, stride=stride) # sources = '0' means webcam
-    else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride)
-
-    # Get names and colors
-    # names = model.module.names if hasattr(model, 'module') else model.names
-    # colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
-
-    colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
-
-    tracker = BoTSORT(opt, frame_rate=30.0)
-
-    #-------------------Action Recognition Model Initialization----------------------------
-    num_total_frames = 0
-    video = cv2.VideoCapture(source)
-    while(True):
-        ret, frame = video.read()
-        if ret:
-            num_total_frames += 1
-        else:
-            break
-    video.release()
-
-    # num_input_to_GCN = 20
-    print('num_total_frames: ', num_total_frames)
-    num_input_to_GCN = int(num_total_frames/3) - 5
-
-    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
-    config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-    # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
-    #                 = stgcnpp_ntu120_xsub_j_6633e6c4.pth
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-    # args.label_map = tools/data/label_map/nturgbd_120.txt
-    # Load label_map
-    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
-
-    fake_anno = dict(
-        frame_dir='',
-        label=-1,
-        img_shape=(0, 0),
-        # original_shape=(h, w),
-        start_index=0,
-        modality='Pose',
-        total_frames=num_input_to_GCN)
-    #--------------------------------------------------------------------------------------
-
-    # Run inference
-    if device.type != 'cpu':
-        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
-
-    start_time = time.time()
-
-    # add one sub-list to input_toGCN for this one frame
-    keypoints_dict = dict() # need this because output of id is not in number order
-    keypoints_score_dict = dict()
-    action_label_dict = dict()
-    online_ids = defaultdict(int)
-    action_label = ''
-    
-    for path, img, im0, vid_cap in dataset: # one dataset = one frame
-        # img: numpy array (384, 640, 3)
-        #--------------------------------------------------------------
-        # change img type from numpy to tensor
-        # so can feed img to GPU, to speed up inference speed
-        img = torch.from_numpy(img).to(device)
-        img = img.half() if half else img.float()  # uint8 to fp16/32
-        img /= 255.0  # 0 - 255 to 0.0 - 1.0
-        if img.ndimension() == 3:
-            img = img.unsqueeze(0)
-        img = img.permute(0,3,1,2)
-        with torch.no_grad():
-            output, _ = model(img)
-        #--------------------------------------------------------------
-        # img: tensor, torch.Size([1, 3, 384, 640])
-
-        # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
-            # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
-
-        # Apply NMS
-        output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
-
-        with torch.no_grad():
-            # output = all keypoints in 1 frame
-            # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
-            targets, detections = output_to_keypoint_and_detections(output)
-            # detections = output_to_keypoint_and_detections(output)
-            # output and detections types are np.array
-
-        # img: tensor, torch.Size([1, 3, 384, 640])
-        nimg = img[0].permute(1, 2, 0) * 255
-        nimg = nimg.cpu().numpy().astype(np.uint8)
-        # # nimg: numpy array (384, 640, 3)
-        h, w, _ = nimg.shape
-
-        #------------------------------------------------------------------------- 
-        #--------------------keypoints visualization------------------------------
-        for idx in range(detections.shape[0]): # detections.shape[0] = number of skeletons detected
-            plot_skeleton_kpts(nimg, detections[idx][5:], 3)
-        #------------------------------------------------------------------------- 
-        #--------------------keypoints visualization------------------------------
-
-        #-------------------------------tracker operations--------------------------------------
-        # image tpye for tracker should be numpy array, in format of (height, length, 3)
-        online_targets = tracker.update(detections, nimg)
-
-        online_tlwhs = []
-        # online_ids = []
-        online_scores = []
-        # online_cls = []
-
-        for t in online_targets:
-            tlwh = t.tlwh # used for filtering out small boxes
-            tlbr = t.tlbr # bbox coordinates
-            tid = t.track_id # a number id for each tracked person, tpye: int
-
-            #-----------------keypoints and scores for one tracked person in this one frame--------------
-            keypoints = []
-            keypoints_score = []
-
-            steps = 3
-            num_keypoints = len(t.cls) // steps
-
-            for i in range(num_keypoints):
-                x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
-                keypoints.append([x_coord, y_coord])
-                keypoints_score.append(t.cls[steps * i + 2])
-            #---------------------------------------------------------------------------------------------
-
-            if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
-                online_tlwhs.append(tlwh)
-                # online_ids.append(tid)
-                online_ids[tid] += 1 # add one if this id appeared before
-                online_scores.append(t.score)
-
-                if online_ids[tid] >= 3: # run below if id has apeared 3 times
-                    online_ids[tid] = 0 # reset the number of apeared to 0, so below runs every 3 times
-
-                    if tid in keypoints_dict: # if it is a new tracking
-                        deque_len_of_this_id = len(keypoints_score_dict[tid])
-                        
-                        # if deque size reaches "num_input_to_GCN", then run inference
-                        if deque_len_of_this_id >= num_input_to_GCN:
-                            print('deque_len_of_this_id: ', deque_len_of_this_id)
-                            keypoints_dict[tid].popleft()
-                            keypoints_score_dict[tid].popleft()
-
-                            keypoints_dict[tid].append(keypoints)
-                            keypoints_score_dict[tid].append(keypoints_score)
-
-                            fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
-                            fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
-                            fake_anno['img_shape'] = (h, w)
-                            action_label = GCN(fake_anno, GCN_model, label_map)
-                            print(action_label)
-                        else:
-                            keypoints_dict[tid].append(keypoints)
-                            keypoints_score_dict[tid].append(keypoints_score)
-                    else: # if the tracking is already exist
-                        keypoints_dict[tid] = deque([keypoints])
-                        keypoints_score_dict[tid] = deque([keypoints_score])
-
-                # # action label for every tracked person
-                action_label_dict[tid] = action_label
-
-                label = f'{tid}, {action_label_dict[tid]}'
-                plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-        cv2.imshow('', nimg)
-        cv2.waitKey(1)  # 1 millisecond
-        #---------------------------------------------------------------------
-
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print('time spent on inference: ', round(execution_time, 2))
-    print('fps: ', round(num_total_frames/execution_time, 2))
-
-class video_dataset(Dataset):
+class video_to_keypoint_dataset(Dataset):
     def __init__(self, path):
         self.path = path
         self.paths = list(pathlib.Path(path).glob("*/*.*"))
         self.classes, self.class_to_idx = self.find_class(path)
 
-        self.list_of_keypoints = video_folder_to_keypoints()
-    
+        self.all_keypoints, self.all_keypoints_score = self.get_keypoints_from_all_video()
+
     def find_class(self, class_path):
             class_names = os.listdir(class_path)
             class_to_idx = {name: i for i, name in enumerate(class_names)}
             return class_names, class_to_idx
     
-    # def video_folder_to_keypoints(path):
-    #     call yolo7 pose to generate keypoints for all videos
-    #     return a dictionary of {class0:keypoints, class1:keypoints}
-        
-    #     return dictionary
-    
     def __getitem__(self, index):
         class_of_this_index = self.class_to_idx[os.path.basename(os.path.dirname(self.paths[index]))]
         
         # return (skeleton of this video, class_of_this_index)
-        return (self.paths[index], class_of_this_index)
+        return (self.all_keypoints[index], self.all_keypoints_score[index], class_of_this_index)
     
     def __len__(self):
         return len(self.paths)
+    
+   
+    def init_track_pose(self):
+        sys.path.insert(0, 'yolov7')
+        
+        # weights = 'yolov7.pt'
+        imgsz = 640
+
+        device = torch.device('cuda')
+
+        # Load model
+        model_path = './pretrained/yolov7-w6-pose.pt'
+
+        weigths = torch.load(model_path, map_location=device)
+        model = weigths['model']
+        _ = model.float().eval()
+
+        stride = int(model.stride.max())  # model stride
+        imgsz = check_img_size(imgsz, s=stride)  # check img_size
+
+        # model = TracedModel(model, device, imgsz)
+
+        if (device.type != 'cpu'): # half = True
+            model.half()  # to FP16
+
+        # Set Dataloader
+        cudnn.benchmark = True  # set True to speed up constant image size inference
+
+        tracker = BoTSORT(opt, frame_rate=30.0)
+
+        # Run inference
+        if device.type != 'cpu':
+            model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
+
+        return device, model, tracker, stride, imgsz
+
+    def keypoints_of_one_video(self, source, device, model, tracker, stride, imgsz):
+        dataset = LoadImages(source, img_size=imgsz, stride=stride)
+
+        num_total_frames = dataset.nframes
+        num_input_to_GCN = int(num_total_frames/3) - 6
+
+        colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
+
+        id_list = []
+        keypoints_dict = dict()
+        keypoints_score_dict = dict()
+        action_label_dict = dict()
+        online_ids = defaultdict(int)
+        action_label = ''
+
+        for path, img, im0, vid_cap in dataset: # one dataset = one frame
+            # img: numpy array (384, 640, 3)
+            #--------------------------------------------------------------
+            # change img type from numpy to tensor
+            # so can feed img to GPU, to speed up inference speed
+            img = torch.from_numpy(img).to(device)
+            img = img.half() if (device.type != 'cpu') else img.float()  # uint8 to fp16/32
+            img /= 255.0  # 0 - 255 to 0.0 - 1.0
+            if img.ndimension() == 3:
+                img = img.unsqueeze(0)
+            img = img.permute(0,3,1,2)
+            with torch.no_grad():
+                output, _ = model(img)
+            #--------------------------------------------------------------
+            # img: tensor, torch.Size([1, 3, 384, 640])
+
+            # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
+                # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
+
+            # Apply NMS
+            output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
+
+            with torch.no_grad():
+                # output = all keypoints in 1 frame
+                # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
+                targets, detections = output_to_keypoint_and_detections(output)
+
+            # img: tensor, torch.Size([1, 3, 384, 640])
+            nimg = img[0].permute(1, 2, 0) * 255
+            nimg = nimg.cpu().numpy().astype(np.uint8)
+            # # nimg: numpy array (384, 640, 3)
+
+            # image tpye for tracker should be numpy array, in format of (height, length, 3)
+            online_targets = tracker.update(detections, nimg)
+
+            # online_tlwhs = []
+            # online_ids = []
+            # online_scores = []
+            # online_cls = []
+
+            for t in online_targets:
+                tlwh = t.tlwh # used for filtering out small boxes
+                tlbr = t.tlbr # bbox coordinates
+                tid = t.track_id # a number id for each tracked person, tpye: int
+
+                #-----------------keypoints and scores for one tracked person in this one frame--------------
+                keypoints = []
+                keypoints_score = []
+
+                steps = 3
+                num_keypoints = len(t.cls) // steps
+
+                for i in range(num_keypoints):
+                    x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
+                    keypoints.append([x_coord, y_coord])
+                    keypoints_score.append(t.cls[steps * i + 2])
+                #---------------------------------------------------------------------------------------------
+
+                if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
+                    # online_tlwhs.append(tlwh)
+                    # online_ids.append(tid)
+                    online_ids[tid] += 1
+                    # online_scores.append(t.score)
+
+                    if online_ids[tid] >= 3:
+                        online_ids[tid] = 0
+                        if tid in keypoints_dict: # if it is an existing tracking id
+                            deque_len_of_this_id = len(keypoints_score_dict[tid])
+                            # print('deque_len_of_this_id: ', deque_len_of_this_id)
+
+                            if deque_len_of_this_id >= num_input_to_GCN:
+                                keypoints_dict[tid].popleft()
+                                keypoints_score_dict[tid].popleft()
+
+                                keypoints_dict[tid].append(keypoints)
+                                keypoints_score_dict[tid].append(keypoints_score)
+                                # fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
+                                # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
+                                # fake_anno['img_shape'] = (h, w)
+                                # action_label = GCN(fake_anno, GCN_model, label_map)
+                            else:
+                                keypoints_dict[tid].append(keypoints)
+                                keypoints_score_dict[tid].append(keypoints_score)
+                        else: # if the tracking id is new
+                            id_list.append(tid)
+                            keypoints_dict[tid] = deque([keypoints])
+                            keypoints_score_dict[tid] = deque([keypoints_score])
+
+                    # # action label for every tracked person
+                    # action_label_dict[tid] = action_label
+
+                    label = f'{tid}'
+                    plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+            # cv2.imshow('', nimg)
+            # cv2.waitKey(1)  # 1 millisecond
+            #---------------------------------------------------------------------
+
+        keypoints_from_all_tracking = []
+        keypoints_score_from_all_tracking = []
+        for id in id_list:
+            keypoints_from_all_tracking.append(list(keypoints_dict[id]))
+            keypoints_score_from_all_tracking.append(list(keypoints_score_dict[id]))
+        
+        return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
+
+    def get_keypoints_from_all_video(self):
+        all_keypoints = []
+        all_keypoints_score = []
+
+        device, model, tracker, stride, imgsz = self.init_track_pose()
+
+        for video_path in self.paths:
+            print('Generating keypoints data for: ', video_path)
+            keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, device, model, tracker, stride, imgsz)
+            all_keypoints.append(keypoints_of_one_video)
+            all_keypoints_score.append(keypoints_score_of_one_video)
+
+        return all_keypoints, all_keypoints_score
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -682,15 +547,14 @@ if __name__ == '__main__':
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
 
-    with torch.no_grad():
-        # detect()
-        keypoints, keypoints_score = get_keypoints_from_all_videos()
-        print('keypoints: ', keypoints.shape)
-        print('keypoints score: ', keypoints_score.shape)
+    # with torch.no_grad():
+    #     # detect()
+    #     keypoints, keypoints_score = get_keypoints_from_all_videos()
+    #     print('keypoints: ', keypoints.shape)
+    #     print('keypoints score: ', keypoints_score.shape)
 
     device = torch.device('cuda')
-    num_input_to_GCN = keypoints_score.shape[1]
-    print('num_input_to_GCN: ', num_input_to_GCN)
+    
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
@@ -702,20 +566,35 @@ if __name__ == '__main__':
         # original_shape=(h, w),
         start_index=0,
         modality='Pose',
-        total_frames=num_input_to_GCN)
+        total_frames=0)
 
-    fake_anno['keypoint'] = keypoints
-    fake_anno['keypoint_score'] = keypoints_score
-    fake_anno['img_shape'] = (384, 640)
-    action_label = GCN(fake_anno, GCN_model, label_map)
-    print(action_label)
-    # dataset = video_dataset('./dataset/')
-    # print('\ndataset.class_to_idx: ', dataset.class_to_idx)
-    # print('dataset.classes:, ', dataset.classes)
-    # print('dataset.path: ', dataset.path)
-    # print('dataset.paths: ', dataset.paths)
-    # print('len(dataset)', len(dataset))
-    # print(dataset[2])
+    # fake_anno['keypoint'] = keypoints
+    # fake_anno['keypoint_score'] = keypoints_score
+    # fake_anno['img_shape'] = (384, 640)
+    # action_label = GCN(fake_anno, GCN_model, label_map)
+    # print(action_label)
+
+
+    dataset = video_to_keypoint_dataset('./dataset/')
+    print('\ndataset.class_to_idx: ', dataset.class_to_idx)
+    print('dataset.classes:, ', dataset.classes)
+    print('dataset.path: ', dataset.path)
+    print('dataset.paths: ', dataset.paths)
+    print('dataset len: ', len(dataset))
+
+    for index in range(len(dataset)):
+        keypoints, keypoints_score, classes = dataset[index]
+        print('shape keypoints of video ', index+1, ': ', keypoints.shape)
+        print('shape keypoints score of video ', index+1, ': ', keypoints_score.shape)
+        print('class of video', index+1, ': ', classes)
+
+        fake_anno['keypoint'] = keypoints
+        fake_anno['keypoint_score'] = keypoints_score
+        fake_anno['img_shape'] = (384, 640)
+        fake_anno['total_frames'] = keypoints_score.shape[1]
+
+        action_label = GCN(fake_anno, GCN_model, label_map)
+        print('action label of video', index+1, ': ', action_label)
 
     #---------------------------for training part------------------------------
     # device = torch.device('cuda')
