@@ -568,13 +568,6 @@ if __name__ == '__main__':
         modality='Pose',
         total_frames=0)
 
-    # fake_anno['keypoint'] = keypoints
-    # fake_anno['keypoint_score'] = keypoints_score
-    # fake_anno['img_shape'] = (384, 640)
-    # action_label = GCN(fake_anno, GCN_model, label_map)
-    # print(action_label)
-
-
     dataset = video_to_keypoint_dataset('./dataset/')
     print('\ndataset.class_to_idx: ', dataset.class_to_idx)
     print('dataset.classes:, ', dataset.classes)
