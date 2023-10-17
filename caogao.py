@@ -99,10 +99,23 @@ def queue_vs_list():
 #     execution_time = end_time - start_time
 #     print('time spent: ', round(execution_time, 4))
 
-dataset = datasets.ImageFolder(root = './test_image')
-print('\ndataset.class_to_idx: ', dataset.class_to_idx)
-print('dataset.classes:, ', dataset.classes)
-print('dataset.root: ', dataset.root)
-print('len(dataset)', len(dataset))
-print(dataset[0])
-print(type(dataset[0]))
+import torch
+import torch.nn as nn
+
+# Correct way to use CrossEntropyLoss
+loss = nn.CrossEntropyLoss()
+input = torch.randn(1, 5)
+target = torch.empty(1, dtype=torch.long).random_(5)
+output = loss(input, target)
+
+print(input)
+print(target)
+print(output)
+print('\n')
+
+input = torch.randn(3, 5, requires_grad=True)
+target = torch.tensor([1, 0, 4])
+output = nn.functional.nll_loss(nn.functional.log_softmax(input, dim=1), target)
+print(input)
+print(target)
+print(output)

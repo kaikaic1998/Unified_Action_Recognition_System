@@ -131,10 +131,22 @@ def GCN(fake_anno, GCN_model, label_map):
     #     modality='Pose',
     #     total_frames=num_frame)
 
-    results = inference_recognizer(GCN_model, fake_anno)
+    results, all_result = inference_recognizer(GCN_model, fake_anno)
+    # print('result: ', all_result)
+    # print('results len: ', len(all_result))
+    # print('results[0][0]: ', all_result[0][0])
+    # print('results[0][0]: ', results[0][0])
+
+    all_scores = []
+    for i in range(len(all_result)):
+        all_scores.append(all_result[i][1])
+    all_scores = torch.Tensor([all_scores])
+    print('\n', all_scores)
+    print('shape: ', all_scores.size())
+
     action_label = label_map[results[0][0]]
 
-    return action_label
+    return action_label, all_scores
 
 #--------------------------------------------------------------------------------------------
 def output_to_keypoint_and_detections(output):
@@ -314,12 +326,13 @@ def output_to_keypoint_and_detections(output):
 #     return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
 class video_to_keypoint_dataset(Dataset):
-    def __init__(self, path):
+    def __init__(self, path, device):
+        self.device = device
         self.path = path
         self.paths = list(pathlib.Path(path).glob("*/*.*"))
         self.classes, self.class_to_idx = self.find_class(path)
 
-        self.all_keypoints, self.all_keypoints_score = self.get_keypoints_from_all_video()
+        self.all_keypoints, self.all_keypoints_score = self.get_all_keypoints_from_all_video()
 
     def find_class(self, class_path):
             class_names = os.listdir(class_path)
@@ -327,22 +340,35 @@ class video_to_keypoint_dataset(Dataset):
             return class_names, class_to_idx
     
     def __getitem__(self, index):
-        class_of_this_index = self.class_to_idx[os.path.basename(os.path.dirname(self.paths[index]))]
+        class_name = os.path.basename(os.path.dirname(self.paths[index]))
+        class_index = self.class_to_idx[class_name]
         
         # return (skeleton of this video, class_of_this_index)
-        return (self.all_keypoints[index], self.all_keypoints_score[index], class_of_this_index)
+        return (self.all_keypoints[index], self.all_keypoints_score[index], class_index, class_name)
     
     def __len__(self):
         return len(self.paths)
-    
+
+    def get_all_keypoints_from_all_video(self):
+        all_keypoints = []
+        all_keypoints_score = []
+
+        with torch.no_grad():
+            model, tracker, stride, imgsz = self.init_track_pose(self.device)
+
+            for video_path in self.paths:
+                print('Generating keypoints data for: ', video_path)
+                keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, self.device, model, tracker, stride, imgsz)
+                all_keypoints.append(keypoints_of_one_video)
+                all_keypoints_score.append(keypoints_score_of_one_video)
+
+        return all_keypoints, all_keypoints_score
    
-    def init_track_pose(self):
+    def init_track_pose(self, device):
         sys.path.insert(0, 'yolov7')
         
         # weights = 'yolov7.pt'
         imgsz = 640
-
-        device = torch.device('cuda')
 
         # Load model
         model_path = './pretrained/yolov7-w6-pose.pt'
@@ -368,7 +394,7 @@ class video_to_keypoint_dataset(Dataset):
         if device.type != 'cpu':
             model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
 
-        return device, model, tracker, stride, imgsz
+        return model, tracker, stride, imgsz
 
     def keypoints_of_one_video(self, source, device, model, tracker, stride, imgsz):
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
@@ -490,19 +516,7 @@ class video_to_keypoint_dataset(Dataset):
         
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
-    def get_keypoints_from_all_video(self):
-        all_keypoints = []
-        all_keypoints_score = []
 
-        device, model, tracker, stride, imgsz = self.init_track_pose()
-
-        for video_path in self.paths:
-            print('Generating keypoints data for: ', video_path)
-            keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, device, model, tracker, stride, imgsz)
-            all_keypoints.append(keypoints_of_one_video)
-            all_keypoints_score.append(keypoints_score_of_one_video)
-
-        return all_keypoints, all_keypoints_score
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -547,17 +561,41 @@ if __name__ == '__main__':
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
 
-    # with torch.no_grad():
-    #     # detect()
-    #     keypoints, keypoints_score = get_keypoints_from_all_videos()
-    #     print('keypoints: ', keypoints.shape)
-    #     print('keypoints score: ', keypoints_score.shape)
-
+    #################################################################################################################
+    #################################################################################################################
     device = torch.device('cuda')
-    
+
+    dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
+    # print('\ndataset.class_to_idx: ', dataset.class_to_idx)
+    # print('dataset.classes:, ', dataset.classes)
+    # print('dataset.path: ', dataset.path)
+    # print('dataset.paths: ', dataset.paths)
+    # print('dataset len: ', len(dataset))
+    # print('----------------------------------------------------\n')
+
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+
     GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    # print(GCN_model.cls_head)
+    # print('\n', GCN_model.cls_head.fc_cls)
+
+    # last layer:
+    # 
+    # (cls_head): GCNHead(
+    #     (loss_cls): CrossEntropyLoss()
+    #     (fc_cls): Linear(in_features=256, out_features=120, bias=True)
+    #   )
+
+    # print(GCN_model.cls_head)
+    # print(GCN_model.cls_head.__dict__)
+    # print(GCN_model.cls_head.in_c) # 256
+    # print(GCN_model.cls_head.num_classes) # 120
+    # print(GCN_model.cls_head.fc_cls) # Linear(in_features=256, out_features=120, bias=True)
+
+    # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    # GCN_model = GCN_model.to(device) # need to send to cuda again, because above line somehow makes model to CPU again
+
     label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
     fake_anno = dict(
         frame_dir='',
@@ -568,60 +606,64 @@ if __name__ == '__main__':
         modality='Pose',
         total_frames=0)
 
-    dataset = video_to_keypoint_dataset('./dataset/')
-    print('\ndataset.class_to_idx: ', dataset.class_to_idx)
-    print('dataset.classes:, ', dataset.classes)
-    print('dataset.path: ', dataset.path)
-    print('dataset.paths: ', dataset.paths)
-    print('dataset len: ', len(dataset))
-
-    for index in range(len(dataset)):
-        keypoints, keypoints_score, classes = dataset[index]
-        print('shape keypoints of video ', index+1, ': ', keypoints.shape)
-        print('shape keypoints score of video ', index+1, ': ', keypoints_score.shape)
-        print('class of video', index+1, ': ', classes)
-
-        fake_anno['keypoint'] = keypoints
-        fake_anno['keypoint_score'] = keypoints_score
-        fake_anno['img_shape'] = (384, 640)
-        fake_anno['total_frames'] = keypoints_score.shape[1]
-
-        action_label = GCN(fake_anno, GCN_model, label_map)
-        print('action label of video', index+1, ': ', action_label)
-
     #---------------------------for training part------------------------------
-    # device = torch.device('cuda')
 
-    # config = Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
-
-    # config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-
-    # if config.get('cudnn_benchmark', False):
-    #     torch.backends.cudnn.benchmark = True
-
-    # criterion = nn.CrossEntropyLoss()
-
-    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-    # # last layer:
-    # # 
-    # # (cls_head): GCNHead(
-    # #     (loss_cls): CrossEntropyLoss()
-    # #     (fc_cls): Linear(in_features=256, out_features=120, bias=True)
-    # #   )
-    # #
-    # # loss function is the cross entropy loss
+    if config.get('cudnn_benchmark', False):
+        torch.backends.cudnn.benchmark = True
 
     # # True = not freeze parameters
     # # False = freeze parameters
-    # for param in GCN_model.parameters():
-    #     param.requires_grad = False 
+    for param in GCN_model.parameters():
+        param.requires_grad = False
 
-    # # print(GCN_model.cls_head)
-    # # print(GCN_model.cls_head.__dict__)
-    # # print(GCN_model.cls_head.in_c) # 256
-    # # print(GCN_model.cls_head.num_classes) # 120
-    # # print(GCN_model.cls_head.fc_cls) # Linear(in_features=256, out_features=120, bias=True)
-    
-    # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    # print(GCN_model.cls_head)
-    # print('\n', GCN_model.cls_head.fc_cls)
+    # optimizer
+    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
+
+    # loss function
+    # criterion = nn.CrossEntropyLoss()
+
+    # train
+    # no need Pytorch Dataloader, because can only feed one set of keypoints at a time to GCN
+    for index, data in enumerate(dataset):
+        pred_keypoints, pred_keypoints_score, pred_class, pred_class_name = data[0], data[1], data[2], data[3]
+
+        # pred_class = torch.tensor(pred_class, dtype=torch.int64)
+
+        # print('index: ', index)
+        # print('keypoints shape: ', pred_keypoints.shape)
+        # print('keypoints_score shape: ', pred_keypoints_score.shape)
+        # print('class: ', pred_class)
+        # print('class name: ', pred_class_name)
+
+        # GCN_model.train()
+        # optimizer.zero_grad()
+
+        fake_anno['keypoint'] = pred_keypoints
+        fake_anno['keypoint_score'] = pred_keypoints_score
+        fake_anno['img_shape'] = (384, 640)
+        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+
+        pred_label, pred_scores = GCN(fake_anno, GCN_model, label_map)
+        # print('label: ', pred_label)
+
+
+        # # if pred_label == 'falling':
+        # #     pred_label = torch.tensor(0.0, dtype=torch.float)
+        # # else:
+        # #     pred_label = torch.tensor(1.0, dtype=torch.float)
+
+        # print('pred_lable: ', pred_label)
+        if index == 0 or 1:
+            pred_class = torch.tensor([42], dtype=torch.int64)
+        if index == 2:
+            pred_class = torch.tensor([54], dtype=torch.int64)
+        if index == 3:
+            pred_class = torch.tensor([98], dtype=torch.int64)
+        print('class: ', pred_class)
+        loss = nn.functional.nll_loss(pred_scores, pred_class) # criterion(prediction, ground truth)
+        print('loss: ', loss, '\n')
+
+        # loss.backward()
+        # optimizer.step()
+
+
