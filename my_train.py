@@ -140,10 +140,11 @@ def GCN(fake_anno, GCN_model, label_map):
     all_scores = []
     for i in range(len(all_result)):
         all_scores.append(all_result[i][1])
-    all_scores = torch.Tensor([all_scores])
     print('\n', all_scores)
-    print('shape: ', all_scores.size())
+    # print('results[0][0]: ', results[0][0])
+    print('result tuple: ', all_result[results[0][0]])
 
+    all_scores = torch.tensor([all_scores], requires_grad=True)
     action_label = label_map[results[0][0]]
 
     return action_label, all_scores
@@ -171,159 +172,6 @@ def output_to_keypoint_and_detections(output):
 
     return np.array(targets), np.array(detections)
 #---------------------------------------------------------------------------------------------
-
-# def init_track_pose():
-#     sys.path.insert(0, 'yolov7')
-    
-#     # weights = 'yolov7.pt'
-#     imgsz = 640
-
-#     device = torch.device('cuda')
-
-#     # Load model
-#     model_path = './pretrained/yolov7-w6-pose.pt'
-
-#     weigths = torch.load(model_path, map_location=device)
-#     model = weigths['model']
-#     _ = model.float().eval()
-
-#     stride = int(model.stride.max())  # model stride
-#     imgsz = check_img_size(imgsz, s=stride)  # check img_size
-
-#     # model = TracedModel(model, device, imgsz)
-
-#     if (device.type != 'cpu'): # half = True
-#         model.half()  # to FP16
-
-#     # Set Dataloader
-#     cudnn.benchmark = True  # set True to speed up constant image size inference
-
-#     tracker = BoTSORT(opt, frame_rate=30.0)
-
-#     # Run inference
-#     if device.type != 'cpu':
-#         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once;
-
-#     return device, model, tracker, stride, imgsz
-
-# def get_keypoints_from_all_videos(source, device, model, tracker, stride, imgsz):
-#     dataset = LoadImages(source, img_size=imgsz, stride=stride)
-#     num_total_frames = dataset.nframes
-#     num_input_to_GCN = int(num_total_frames/3) - 6
-
-#     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
-
-#     id_list = []
-#     keypoints_dict = dict()
-#     keypoints_score_dict = dict()
-#     action_label_dict = dict()
-#     online_ids = defaultdict(int)
-#     action_label = ''
-
-#     for path, img, im0, vid_cap in dataset: # one dataset = one frame
-#         # img: numpy array (384, 640, 3)
-#         #--------------------------------------------------------------
-#         # change img type from numpy to tensor
-#         # so can feed img to GPU, to speed up inference speed
-#         img = torch.from_numpy(img).to(device)
-#         img = img.half() if (device.type != 'cpu') else img.float()  # uint8 to fp16/32
-#         img /= 255.0  # 0 - 255 to 0.0 - 1.0
-#         if img.ndimension() == 3:
-#             img = img.unsqueeze(0)
-#         img = img.permute(0,3,1,2)
-#         with torch.no_grad():
-#             output, _ = model(img)
-#         #--------------------------------------------------------------
-#         # img: tensor, torch.Size([1, 3, 384, 640])
-
-#         # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
-#             # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
-
-#         # Apply NMS
-#         output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
-
-#         with torch.no_grad():
-#             # output = all keypoints in 1 frame
-#             # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
-#             targets, detections = output_to_keypoint_and_detections(output)
-
-#         # img: tensor, torch.Size([1, 3, 384, 640])
-#         nimg = img[0].permute(1, 2, 0) * 255
-#         nimg = nimg.cpu().numpy().astype(np.uint8)
-#         # # nimg: numpy array (384, 640, 3)
-
-#         # image tpye for tracker should be numpy array, in format of (height, length, 3)
-#         online_targets = tracker.update(detections, nimg)
-
-#         # online_tlwhs = []
-#         # online_ids = []
-#         # online_scores = []
-#         # online_cls = []
-
-#         for t in online_targets:
-#             tlwh = t.tlwh # used for filtering out small boxes
-#             tlbr = t.tlbr # bbox coordinates
-#             tid = t.track_id # a number id for each tracked person, tpye: int
-
-#             #-----------------keypoints and scores for one tracked person in this one frame--------------
-#             keypoints = []
-#             keypoints_score = []
-
-#             steps = 3
-#             num_keypoints = len(t.cls) // steps
-
-#             for i in range(num_keypoints):
-#                 x_coord, y_coord = t.cls[steps * i], t.cls[steps * i + 1]
-#                 keypoints.append([x_coord, y_coord])
-#                 keypoints_score.append(t.cls[steps * i + 2])
-#             #---------------------------------------------------------------------------------------------
-
-#             if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
-#                 # online_tlwhs.append(tlwh)
-#                 # online_ids.append(tid)
-#                 online_ids[tid] += 1
-#                 # online_scores.append(t.score)
-
-#                 if online_ids[tid] >= 3:
-#                     online_ids[tid] = 0
-#                     if tid in keypoints_dict: # if it is an existing tracking id
-#                         deque_len_of_this_id = len(keypoints_score_dict[tid])
-#                         print('deque_len_of_this_id: ', deque_len_of_this_id)
-
-#                         if deque_len_of_this_id >= num_input_to_GCN:
-#                             keypoints_dict[tid].popleft()
-#                             keypoints_score_dict[tid].popleft()
-
-#                             keypoints_dict[tid].append(keypoints)
-#                             keypoints_score_dict[tid].append(keypoints_score)
-#                             # fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
-#                             # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
-#                             # fake_anno['img_shape'] = (h, w)
-#                             # action_label = GCN(fake_anno, GCN_model, label_map)
-#                         else:
-#                             keypoints_dict[tid].append(keypoints)
-#                             keypoints_score_dict[tid].append(keypoints_score)
-#                     else: # if the tracking id is new
-#                         id_list.append(tid)
-#                         keypoints_dict[tid] = deque([keypoints])
-#                         keypoints_score_dict[tid] = deque([keypoints_score])
-
-#                 # # action label for every tracked person
-#                 # action_label_dict[tid] = action_label
-
-#                 label = f'{tid}'
-#                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-#         cv2.imshow('', nimg)
-#         cv2.waitKey(1)  # 1 millisecond
-#         #---------------------------------------------------------------------
-
-#     keypoints_from_all_tracking = []
-#     keypoints_score_from_all_tracking = []
-#     for id in id_list:
-#         keypoints_from_all_tracking.append(list(keypoints_dict[id]))
-#         keypoints_score_from_all_tracking.append(list(keypoints_score_dict[id]))
-    
-#     return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
 class video_to_keypoint_dataset(Dataset):
     def __init__(self, path, device):
@@ -516,7 +364,7 @@ class video_to_keypoint_dataset(Dataset):
         
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
-
+ 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -578,10 +426,6 @@ if __name__ == '__main__':
 
     GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
     # print(GCN_model.cls_head)
-    # print('\n', GCN_model.cls_head.fc_cls)
-
-    # last layer:
-    # 
     # (cls_head): GCNHead(
     #     (loss_cls): CrossEntropyLoss()
     #     (fc_cls): Linear(in_features=256, out_features=120, bias=True)
@@ -593,10 +437,24 @@ if __name__ == '__main__':
     # print(GCN_model.cls_head.num_classes) # 120
     # print(GCN_model.cls_head.fc_cls) # Linear(in_features=256, out_features=120, bias=True)
 
-    # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    # GCN_model = GCN_model.to(device) # need to send to cuda again, because above line somehow makes model to CPU again
+    # # True = not freeze parameters
+    # # False = freeze parameters
+    for param in GCN_model.parameters():
+        param.requires_grad = False
 
-    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    GCN_model = GCN_model.to(device) # need to send to cuda again, because above line somehow makes model to CPU again
+    # print('GCN_model.cls_head: ', GCN_model.cls_head)
+    # # GCN_model.cls_head:  GCNHead(
+    # (loss_cls): CrossEntropyLoss()
+    # (fc_cls): Linear(in_features=256, out_features=2, bias=True)
+    # )
+    # for param in GCN_model.cls_head.fc_cls.parameters():
+    for param in GCN_model.cls_head.parameters():
+        param.requires_grad = True
+
+    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
     fake_anno = dict(
         frame_dir='',
         label=-1,
@@ -608,26 +466,24 @@ if __name__ == '__main__':
 
     #---------------------------for training part------------------------------
 
-    if config.get('cudnn_benchmark', False):
-        torch.backends.cudnn.benchmark = True
-
-    # # True = not freeze parameters
-    # # False = freeze parameters
-    for param in GCN_model.parameters():
-        param.requires_grad = False
+    # if config.get('cudnn_benchmark', False):
+    #     torch.backends.cudnn.benchmark = True
 
     # optimizer
-    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
+    # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
+    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01)
 
     # loss function
     # criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
 
+    loss_list = []
     # train
     # no need Pytorch Dataloader, because can only feed one set of keypoints at a time to GCN
     for index, data in enumerate(dataset):
         pred_keypoints, pred_keypoints_score, pred_class, pred_class_name = data[0], data[1], data[2], data[3]
 
-        # pred_class = torch.tensor(pred_class, dtype=torch.int64)
+        pred_class = torch.tensor([pred_class], dtype=torch.int64)
 
         # print('index: ', index)
         # print('keypoints shape: ', pred_keypoints.shape)
@@ -635,35 +491,28 @@ if __name__ == '__main__':
         # print('class: ', pred_class)
         # print('class name: ', pred_class_name)
 
-        # GCN_model.train()
-        # optimizer.zero_grad()
-
         fake_anno['keypoint'] = pred_keypoints
         fake_anno['keypoint_score'] = pred_keypoints_score
         fake_anno['img_shape'] = (384, 640)
         fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
+        # GCN_model.train()
+        optimizer.zero_grad()
+
         pred_label, pred_scores = GCN(fake_anno, GCN_model, label_map)
-        # print('label: ', pred_label)
 
+        log_pred_scores = torch.log(pred_scores)
 
-        # # if pred_label == 'falling':
-        # #     pred_label = torch.tensor(0.0, dtype=torch.float)
-        # # else:
-        # #     pred_label = torch.tensor(1.0, dtype=torch.float)
-
-        # print('pred_lable: ', pred_label)
-        if index == 0 or 1:
-            pred_class = torch.tensor([42], dtype=torch.int64)
-        if index == 2:
-            pred_class = torch.tensor([54], dtype=torch.int64)
-        if index == 3:
-            pred_class = torch.tensor([98], dtype=torch.int64)
+        print('label: ', pred_label)
         print('class: ', pred_class)
-        loss = nn.functional.nll_loss(pred_scores, pred_class) # criterion(prediction, ground truth)
-        print('loss: ', loss, '\n')
 
-        # loss.backward()
-        # optimizer.step()
+        loss = criterion(log_pred_scores, pred_class) # criterion(prediction, ground truth)
+
+        loss.backward()
+        optimizer.step()
+
+        loss_list.append(loss.item())
+
+    print('loss list: ', loss_list)
 
 

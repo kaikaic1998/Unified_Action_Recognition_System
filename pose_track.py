@@ -190,8 +190,9 @@ def GCN(fake_anno, GCN_model, label_map):
     #     start_index=0,
     #     modality='Pose',
     #     total_frames=num_frame)
-
-    results = inference_recognizer(GCN_model, fake_anno)
+    
+    # results = inference_recognizer(GCN_model, fake_anno)
+    results, not_used = inference_recognizer(GCN_model, fake_anno)
     action_label = label_map[results[0][0]]
 
     return action_label
