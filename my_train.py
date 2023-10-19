@@ -140,9 +140,9 @@ def GCN(fake_anno, GCN_model, label_map):
     all_scores = []
     for i in range(len(all_result)):
         all_scores.append(all_result[i][1])
-    print('\n', all_scores)
-    # print('results[0][0]: ', results[0][0])
-    print('result tuple: ', all_result[results[0][0]])
+    # print('\n', all_scores)
+    # # print('results[0][0]: ', results[0][0])
+    # print('result tuple: ', all_result[results[0][0]])
 
     all_scores = torch.tensor([all_scores], requires_grad=True)
     action_label = label_map[results[0][0]]
@@ -442,19 +442,20 @@ if __name__ == '__main__':
     for param in GCN_model.parameters():
         param.requires_grad = False
 
-    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    GCN_model = GCN_model.to(device) # need to send to cuda again, because above line somehow makes model to CPU again
+    # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    # # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+    # GCN_model = GCN_model.to(device) # need to send to cuda again, because above line somehow makes model to CPU again
     # print('GCN_model.cls_head: ', GCN_model.cls_head)
-    # # GCN_model.cls_head:  GCNHead(
-    # (loss_cls): CrossEntropyLoss()
-    # (fc_cls): Linear(in_features=256, out_features=2, bias=True)
-    # )
-    # for param in GCN_model.cls_head.fc_cls.parameters():
-    for param in GCN_model.cls_head.parameters():
-        param.requires_grad = True
+    # # # GCN_model.cls_head:  GCNHead(
+    # # (loss_cls): CrossEntropyLoss()
+    # # (fc_cls): Linear(in_features=256, out_features=2, bias=True)
+    # # )
+    # # for param in GCN_model.cls_head.fc_cls.parameters():
+    # for param in GCN_model.cls_head.parameters():
+    #     param.requires_grad = True
 
-    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
-    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
+    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    # label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
     fake_anno = dict(
         frame_dir='',
         label=-1,
@@ -497,22 +498,28 @@ if __name__ == '__main__':
         fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
         # GCN_model.train()
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
 
         pred_label, pred_scores = GCN(fake_anno, GCN_model, label_map)
 
-        log_pred_scores = torch.log(pred_scores)
+        # log_pred_scores = torch.log(pred_scores)
 
         print('label: ', pred_label)
-        print('class: ', pred_class)
+        # print('class: ', pred_class)
 
-        loss = criterion(log_pred_scores, pred_class) # criterion(prediction, ground truth)
+        # loss = criterion(log_pred_scores, pred_class) # criterion(prediction, ground truth)
 
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+        # optimizer.step()
+        # print('loss: ', loss)
 
-        loss_list.append(loss.item())
+        # loss_list.append(loss.item())
+        
+        # for param in GCN_model.cls_head.parameters():
+        #     print('param: ', param)
 
-    print('loss list: ', loss_list)
+
+
+    print('\nloss list: ', loss_list)
 
 

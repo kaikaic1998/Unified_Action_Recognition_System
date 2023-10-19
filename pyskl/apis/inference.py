@@ -173,6 +173,7 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         # with torch.no_grad():
         #     scores = model(return_loss=False, **data)[0]
         scores = model(return_loss=False, **data)[0]
+        # scores = model(return_loss=True, **data)[0]
         returned_features = h.layer_outputs if outputs else None
 
     num_classes = scores.shape[-1]

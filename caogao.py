@@ -120,27 +120,31 @@ import torch.nn as nn
 # print(target)
 # print(output)
 
-m = nn.LogSoftmax(dim=1)
-loss = nn.NLLLoss()
-# input is of size N x C = 3 x 5
-input = torch.randn(1, 5, requires_grad=True)
-# each element in target has to have 0 <= value < C
-# target = torch.tensor([1, 0, 4])
-target = torch.empty(1, dtype=torch.long).random_(5)
-softmax = m(input)
-output = loss(softmax, target)
+# m = nn.LogSoftmax(dim=1)
+# loss = nn.NLLLoss()
+# # input is of size N x C = 3 x 5
+# input = torch.randn(1, 5, requires_grad=True)
+# # each element in target has to have 0 <= value < C
+# # target = torch.tensor([1, 0, 4])
+# target = torch.empty(1, dtype=torch.long).random_(5)
+# softmax = m(input)
+# output = loss(softmax, target)
 
-print(input)
-print(softmax)
-print(target)
-print(output, '\n')
+# print(input)
+# print(softmax)
+# print(target)
+# print(output, '\n')
 
-softmax = torch.tensor([0.006354291, 0.028920725, 1.0, 0.00805, 0.00046146192], requires_grad=True)
-input = torch.log(softmax)
-target = torch.tensor(2, dtype=torch.long)
-output = loss(input, target)
+# softmax = torch.tensor([0.006354291, 0.028920725, 1.0, 0.00805, 0.00046146192], requires_grad=True)
+# input = torch.log(softmax)
+# target = torch.tensor(2, dtype=torch.long)
+# output = loss(input, target)
 
-print(softmax)
-print(input)
-print(target)
-print(output)
+# print(softmax)
+# print(input)
+# print(target)
+# print(output)
+
+target1 = torch.tensor([1, 0, 4])
+target2 = torch.tensor([1, 0, 4])
+print(target1 == target2)
