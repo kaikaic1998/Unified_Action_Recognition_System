@@ -20,6 +20,8 @@ from collections import deque
 from collections import defaultdict
 import pathlib
 
+from pyskl.models.recognizers.recognizergcn import RecognizerGCN
+
 from yolov7.utils.datasets import letterbox
 from yolov7.utils.general import check_img_size, non_max_suppression, scale_coords, non_max_suppression_kpt
 from yolov7.utils.general import xywh2xyxy, xyxy2xywh
@@ -364,7 +366,50 @@ class video_to_keypoint_dataset(Dataset):
         
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
- 
+# class Custom_STGCN_Model(RecognizerGCN):
+class Custom_STGCN_Model(nn.Module):
+    def __init__(self, config, device, label_map):
+        super(Custom_STGCN_Model, self).__init__()
+        self.label_map = label_map
+
+        self.model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        # self.model.cls_head.fc_cls = nn.Linear(self.model.cls_head.in_c, 2)
+        self.model.cls_head.fc_cls = nn.Sequential(
+            nn.Linear(self.model.cls_head.in_c, 120),
+            nn.ReLU(),
+            nn.Linear(120, 2),
+        )
+        # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+
+        for param in self.model.cls_head.parameters():
+            param.requires_grad = True
+
+        self.model = self.model.to(device)
+
+        print('model head: ', self.model.cls_head)
+
+    def forward(self, fake_anno):
+        results, all_result = inference_recognizer(self.model, fake_anno)
+
+        all_scores = []
+        for i in range(len(all_result)):
+            all_scores.append(all_result[i][1])
+        # print('\n', all_scores)
+        # # print('results[0][0]: ', results[0][0])
+        # print('result tuple: ', all_result[results[0][0]])
+
+        all_scores = torch.tensor([all_scores], requires_grad=True)
+        action_label = label_map[results[0][0]]
+
+        for param in self.model.cls_head.parameters():
+            print('param: ', param)
+
+        return action_label, all_scores
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -424,7 +469,8 @@ if __name__ == '__main__':
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
 
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    #------
+    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
     # print(GCN_model.cls_head)
     # (cls_head): GCNHead(
     #     (loss_cls): CrossEntropyLoss()
@@ -439,8 +485,8 @@ if __name__ == '__main__':
 
     # # True = not freeze parameters
     # # False = freeze parameters
-    for param in GCN_model.parameters():
-        param.requires_grad = False
+    # for param in GCN_model.parameters():
+    #     param.requires_grad = False
 
     # GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
     # # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
@@ -454,8 +500,8 @@ if __name__ == '__main__':
     # for param in GCN_model.cls_head.parameters():
     #     param.requires_grad = True
 
-    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
-    # label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
+    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
     fake_anno = dict(
         frame_dir='',
         label=-1,
@@ -465,6 +511,7 @@ if __name__ == '__main__':
         modality='Pose',
         total_frames=0)
 
+    GCN_model = Custom_STGCN_Model(config, device, label_map)
     #---------------------------for training part------------------------------
 
     # if config.get('cudnn_benchmark', False):
@@ -497,23 +544,24 @@ if __name__ == '__main__':
         fake_anno['img_shape'] = (384, 640)
         fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
-        # GCN_model.train()
-        # optimizer.zero_grad()
+        GCN_model.train()
+        optimizer.zero_grad()
 
-        pred_label, pred_scores = GCN(fake_anno, GCN_model, label_map)
+        # pred_label, pred_scores = GCN(fake_anno, GCN_model, label_map)
+        pred_label, pred_scores = GCN_model(fake_anno)
 
-        # log_pred_scores = torch.log(pred_scores)
+        log_pred_scores = torch.log(pred_scores)
 
         print('label: ', pred_label)
-        # print('class: ', pred_class)
+        print('class: ', pred_class)
 
-        # loss = criterion(log_pred_scores, pred_class) # criterion(prediction, ground truth)
+        loss = criterion(log_pred_scores, pred_class) # criterion(prediction, ground truth)
 
-        # loss.backward()
-        # optimizer.step()
-        # print('loss: ', loss)
+        loss.backward()
+        optimizer.step()
+        print('loss: ', loss)
 
-        # loss_list.append(loss.item())
+        loss_list.append(loss.item())
         
         # for param in GCN_model.cls_head.parameters():
         #     print('param: ', param)
