@@ -167,13 +167,15 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
     if next(model.parameters()).is_cuda:
         # scatter to specified GPU
         data = scatter(data, [device])[0]
+    print('data size: ', data['keypoint'].size())
+    print('---------Right before inputting into the model---------\n')
 
     # forward the model
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
         # with torch.no_grad():
         #     scores = model(return_loss=False, **data)[0]
-        scores = model(return_loss=False, **data)[0]
         # scores = model(return_loss=True, **data)[0]
+        scores = model(return_loss=False, **data)[0]
         returned_features = h.layer_outputs if outputs else None
 
     num_classes = scores.shape[-1]

@@ -354,8 +354,8 @@ class video_to_keypoint_dataset(Dataset):
 
                     label = f'{tid}'
                     plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-            # cv2.imshow('', nimg)
-            # cv2.waitKey(1)  # 1 millisecond
+            cv2.imshow('', nimg)
+            cv2.waitKey(1)  # 1 millisecond
             #---------------------------------------------------------------------
 
         keypoints_from_all_tracking = []
@@ -373,19 +373,20 @@ class Custom_STGCN_Model(nn.Module):
         self.label_map = label_map
 
         self.model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    
 
         for param in self.model.parameters():
             param.requires_grad = False
 
-        # self.model.cls_head.fc_cls = nn.Linear(self.model.cls_head.in_c, 2)
-        self.model.cls_head.fc_cls = nn.Sequential(
-            nn.Linear(self.model.cls_head.in_c, 120),
-            nn.ReLU(),
-            nn.Linear(120, 2),
-        )
+        self.model.cls_head.fc_cls = nn.Linear(self.model.cls_head.in_c, 2)
+        # self.model.cls_head.fc_cls = nn.Sequential(
+        #     nn.Linear(self.model.cls_head.in_c, 120),
+        #     nn.ReLU(),
+        #     nn.Linear(120, 2),
+        # )
         # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
 
-        for param in self.model.cls_head.parameters():
+        for param in self.model.cls_head.fc_cls.parameters():
             param.requires_grad = True
 
         self.model = self.model.to(device)
@@ -405,8 +406,9 @@ class Custom_STGCN_Model(nn.Module):
         all_scores = torch.tensor([all_scores], requires_grad=True)
         action_label = label_map[results[0][0]]
 
-        for param in self.model.cls_head.parameters():
-            print('param: ', param)
+        for param in self.model.cls_head.fc_cls.parameters():
+            # print('param: ', param)
+            print('require grad: ', param.requires_grad)
 
         return action_label, all_scores
 
@@ -467,7 +469,12 @@ if __name__ == '__main__':
     # print('----------------------------------------------------\n')
 
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
+    print('config before: ', config, '\n')
+    print('config.data.train: ', config.data.train, '\n')
+    print('config.data.test: ', config.data.test)
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+    # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
+    print('config after: ', config)
 
     #------
     # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
@@ -539,6 +546,7 @@ if __name__ == '__main__':
         # print('class: ', pred_class)
         # print('class name: ', pred_class_name)
 
+        print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
         fake_anno['keypoint'] = pred_keypoints
         fake_anno['keypoint_score'] = pred_keypoints_score
         fake_anno['img_shape'] = (384, 640)

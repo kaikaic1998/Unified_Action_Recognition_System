@@ -11,10 +11,14 @@ class RecognizerGCN(BaseRecognizer):
 
     def forward_train(self, keypoint, label, **kwargs):
         """Defines the computation performed at every call when training."""
-        print(keypoint.shape)
+        print('train keypoint: ', keypoint.shape)
         assert self.with_cls_head
+        print('keypoint.shape[1]: ', keypoint.shape[1])
         assert keypoint.shape[1] == 1
         keypoint = keypoint[:, 0]
+
+        # keypoint = keypoint.squeeze(0)
+        # print('train keypoint after: ', keypoint.shape)
 
         losses = dict()
         x = self.extract_feat(keypoint)
@@ -29,10 +33,11 @@ class RecognizerGCN(BaseRecognizer):
     def forward_test(self, keypoint, **kwargs):
         """Defines the computation performed at every call when evaluation and
         testing."""
-        print(keypoint.shape)
+        print('keypoint: ', keypoint.shape)
         assert self.with_cls_head or self.feat_ext
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
+        print('keypoint after: ', keypoint.shape)
 
         x = self.extract_feat(keypoint)
         feat_ext = self.test_cfg.get('feat_ext', False)
