@@ -229,12 +229,12 @@ def detect():
     # weights = 'yolov7.pt'
     imgsz = 640
 
-    source = '0'
+    # source = '0'
     # source = './video/palace.mp4'
     # source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
     # source = './video/breakdance.mp4'
-    # source = './video/human_fall_2.mp4'
+    source = './video/human_fall_2.mp4'
 
     # Initialize
     device = torch.device('cuda')

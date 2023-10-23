@@ -11,29 +11,45 @@ class RecognizerGCN(BaseRecognizer):
 
     def forward_train(self, keypoint, label, **kwargs):
         """Defines the computation performed at every call when training."""
-        print('train keypoint: ', keypoint.shape)
+        print('keypoint shape: ', keypoint.shape)
         assert self.with_cls_head
         print('keypoint.shape[1]: ', keypoint.shape[1])
         assert keypoint.shape[1] == 1
-        keypoint = keypoint[:, 0]
+        # keypoint = keypoint[:, 0]
+        bs, nc = keypoint.shape[:2]
+        keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
 
         # keypoint = keypoint.squeeze(0)
-        # print('train keypoint after: ', keypoint.shape)
+        print('train keypoint after: ', keypoint.shape)
 
         losses = dict()
         x = self.extract_feat(keypoint)
         cls_score = self.cls_head(x)
-        gt_label = label.squeeze(-1)
-        loss = self.cls_head.loss(cls_score, gt_label)
-        losses.update(loss)
+        # print('cls_score: ', cls_score)
+        # gt_label = label.squeeze(-1)
+        # gt_label = torch.tensor([42], dtype=torch.int64)
 
-        print('losses: ', losses)
+        #----------------------------
+        #----------------------------
+        # gt_label = torch.tensor([1], dtype=torch.int64).to(torch.device('cuda'))
+        gt_label = label
+        print('gt_label: ', gt_label)
+        #----------------------------
+        #----------------------------
+
+        loss = self.cls_head.loss(cls_score, gt_label)
+        print('loss: ', loss)
+
+        print('losses before: ', losses)
+        losses.update(loss)
+        print('losses after: ', losses)
+
         return losses
 
     def forward_test(self, keypoint, **kwargs):
         """Defines the computation performed at every call when evaluation and
         testing."""
-        print('keypoint: ', keypoint.shape)
+        print('keypoint shape: ', keypoint.shape)
         assert self.with_cls_head or self.feat_ext
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
