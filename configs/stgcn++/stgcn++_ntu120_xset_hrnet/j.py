@@ -7,7 +7,7 @@ model = dict(
         tcn_type='mstcn',
         graph_cfg=dict(layout='coco', mode='spatial')),
     # cls_head=dict(type='GCNHead', num_classes=120, in_channels=256))
-    cls_head=dict(type='GCNHead', num_classes=120, in_channels=256))
+    cls_head=dict(type='GCNHead', num_classes=2, in_channels=256))
 
 dataset_type = 'PoseDataset'
 ann_file = 'tools/data/ntu120_hrnet.pkl'

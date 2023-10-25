@@ -19,6 +19,8 @@ import mmcv
 from collections import deque
 from collections import defaultdict
 import pathlib
+import random
+from matplotlib import pyplot as plt
 
 from pyskl.models.recognizers.recognizergcn import RecognizerGCN
 
@@ -391,35 +393,41 @@ if __name__ == '__main__':
 
     #################################################################################################################
     #################################################################################################################
-    device = torch.device('cuda')
+    train = True
 
-    dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
-    # print('\ndataset.class_to_idx: ', dataset.class_to_idx)
-    # print('dataset.classes:, ', dataset.classes)
-    # print('dataset.path: ', dataset.path)
-    # print('dataset.paths: ', dataset.paths)
-    # print('dataset len: ', len(dataset))
-    # print('----------------------------------------------------\n')
+    device = torch.device('cuda')
 
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
 
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    if train:
+        config['model']['cls_head']['num_classes'] = 120
 
-    for param in GCN_model.parameters():
-        param.requires_grad = False
+        dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
 
-    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    # self.model.cls_head.fc_cls = nn.Sequential(
-    #     nn.Linear(self.model.cls_head.in_c, 120),
-    #     nn.ReLU(),
-    #     nn.Linear(120, 2),
-    # )
-    # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+        GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
 
-    for param in GCN_model.cls_head.fc_cls.parameters():
-        param.requires_grad = True
+        for param in GCN_model.parameters():
+            param.requires_grad = False
+
+        GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+        # GCN_model.cls_head.fc_cls = nn.Sequential(
+        #     nn.Linear(GCN_model.cls_head.in_c, 120),
+        #     nn.ReLU(),
+        #     nn.Linear(120, 2),
+        # )
+        # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+
+        for param in GCN_model.cls_head.fc_cls.parameters():
+            param.requires_grad = True
+    else:
+        dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
+
+        GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+
+        for param in GCN_model.parameters():
+            param.requires_grad = False
 
     GCN_model = GCN_model.to(device)
 
@@ -436,65 +444,80 @@ if __name__ == '__main__':
         modality='Pose',
         total_frames=0)
     
-    #---------------------------for training part------------------------------
-    train = True
+    #---------------------------for training part-----------------------------
 
     # if config.get('cudnn_benchmark', False):
     #     torch.backends.cudnn.benchmark = True
 
     # optimizer
     # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
-    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01)
+    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
 
     # loss function
     # criterion = nn.CrossEntropyLoss()
-    criterion = nn.NLLLoss()
+    # criterion = nn.NLLLoss()
 
     loss_list = []
-    # train
-    # no need Pytorch Dataloader, because can only feed one set of keypoints at a time to GCN
-    for index, data in enumerate(dataset):
-        pred_keypoints, pred_keypoints_score, pred_class, pred_class_name = data[0], data[1], data[2], data[3]
+    
+    epochs = 10
+    random_index = list(range(len(dataset)))
 
-        pred_class = torch.tensor([pred_class], dtype=torch.int64)
+    for i in range(epochs):
+        random.shuffle(random_index)
+        # print('random numbers', random_index)
 
-        # print('index: ', index)
-        # print('keypoints shape: ', pred_keypoints.shape)
-        # print('keypoints_score shape: ', pred_keypoints_score.shape)
-        # print('class: ', pred_class)
-        # print('class name: ', pred_class_name)
+        # for index, data in enumerate(dataset):
+        for i in random_index:
+            data = dataset[i]
+        #     index = i
 
-        print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
-        fake_anno['keypoint'] = pred_keypoints
-        fake_anno['keypoint_score'] = pred_keypoints_score
-        fake_anno['img_shape'] = (384, 640)
-        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+            pred_keypoints, pred_keypoints_score, pred_class, pred_class_name = data[0], data[1], data[2], data[3]
 
-        # GCN_model.train()
-        # optimizer.zero_grad()
+            pred_class = torch.tensor([pred_class], dtype=torch.int64).to(device)
 
-        if train:
-            GCN_model.train()
-            optimizer.zero_grad()
+            # print('index: ', index)
+            # print('keypoints shape: ', pred_keypoints.shape)
+            # print('keypoints_score shape: ', pred_keypoints_score.shape)
+            # print('class: ', pred_class)
+            # print('class name: ', pred_class_name)
 
-            loss = train_GCN(GCN_model, fake_anno, pred_class)
+            # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
+            fake_anno['keypoint'] = pred_keypoints
+            fake_anno['keypoint_score'] = pred_keypoints_score
+            fake_anno['img_shape'] = (384, 640)
+            fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
-            loss.backward()
-            optimizer.step()
-            print('loss: ', loss)
+            if train:
+                print('traininng')
+                # GCN_model.train()
+                optimizer.zero_grad()
 
-            loss_list.append(loss.item())
-        else:
-            pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
+                loss = train_GCN(GCN_model, fake_anno, pred_class)
 
-            print('label: ', pred_label)
-            print('class: ', pred_class)
-        
-        # for param in GCN_model.cls_head.parameters():
-        #     print('param: ', param)
+                loss.backward()
+                optimizer.step()
+                print('ground truth: ', pred_class)
+                print('loss in main: ', loss, '\n')
+
+                loss_list.append(loss.item())
+            else:
+                print('inferencing')
+                pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
+
+                print('ground truth: ', pred_class)
+                print('predicted label: ', pred_label)
+                print('score: ', pred_scores)
+            
+            # for param in GCN_model.cls_head.parameters():
+            #     print('param: ', param)
 
 
+    if train:
+        print('loss list: ', loss_list)
 
-    print('\nloss list: ', loss_list)
+        plt.plot(loss_list)
+        plt.show()
+
+        torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 
 

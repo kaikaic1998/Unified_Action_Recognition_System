@@ -10,50 +10,43 @@ class RecognizerGCN(BaseRecognizer):
     """GCN-based recognizer for skeleton-based action recognition. """
 
     def forward_train(self, keypoint, label, **kwargs):
+    # def forward_train(self, keypoint, **kwargs):
         """Defines the computation performed at every call when training."""
-        print('keypoint shape: ', keypoint.shape)
+        # print('keypoint shape: ', keypoint.shape)
         assert self.with_cls_head
-        print('keypoint.shape[1]: ', keypoint.shape[1])
         assert keypoint.shape[1] == 1
         # keypoint = keypoint[:, 0]
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
 
-        # keypoint = keypoint.squeeze(0)
-        print('train keypoint after: ', keypoint.shape)
+        # print('train keypoint after: ', keypoint.shape)
 
         losses = dict()
         x = self.extract_feat(keypoint)
+        # print('self.cls_head: ', self.cls_head)
         cls_score = self.cls_head(x)
-        # print('cls_score: ', cls_score)
-        # gt_label = label.squeeze(-1)
-        # gt_label = torch.tensor([42], dtype=torch.int64)
 
-        #----------------------------
-        #----------------------------
-        # gt_label = torch.tensor([1], dtype=torch.int64).to(torch.device('cuda'))
-        gt_label = label
-        print('gt_label: ', gt_label)
-        #----------------------------
-        #----------------------------
+        m = torch.nn.Softmax(dim=1)
+        print('softmax scores: ', m(cls_score))
 
-        loss = self.cls_head.loss(cls_score, gt_label)
-        print('loss: ', loss)
+        print('cls_score: ', cls_score)
+        # print('label in forward train: ', label)
 
-        print('losses before: ', losses)
+        loss = self.cls_head.loss(cls_score, label)
+        # print('loss in forward_train(): ', loss)
+
         losses.update(loss)
-        print('losses after: ', losses)
 
         return losses
 
     def forward_test(self, keypoint, **kwargs):
         """Defines the computation performed at every call when evaluation and
         testing."""
-        print('keypoint shape: ', keypoint.shape)
+        # print('keypoint shape: ', keypoint.shape)
         assert self.with_cls_head or self.feat_ext
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
-        print('keypoint after: ', keypoint.shape)
+        # print('keypoint after: ', keypoint.shape)
 
         x = self.extract_feat(keypoint)
         feat_ext = self.test_cfg.get('feat_ext', False)
@@ -101,9 +94,11 @@ class RecognizerGCN(BaseRecognizer):
 
     def forward(self, keypoint, label=None, return_loss=True, **kwargs):
         """Define the computation performed at every call."""
+
         if return_loss:
             if label is None:
                 raise ValueError('Label should not be None.')
+            # return self.forward_train(keypoint, **kwargs)
             return self.forward_train(keypoint, label, **kwargs)
 
         return self.forward_test(keypoint, **kwargs)

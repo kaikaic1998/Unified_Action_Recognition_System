@@ -1,6 +1,8 @@
 pretrained/
 tools/data/
 test_image/
+dataset/
+train_dataset/
 
 *.ipynb
 *.pkl

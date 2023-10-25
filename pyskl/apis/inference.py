@@ -168,15 +168,14 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         # scatter to specified GPU
         data = scatter(data, [device])[0]
 
-    print('data size: ', data['keypoint'].size())
-    print('---------Right before inputting into the model---------\n')
+    # print('data size: ', data['keypoint'].size())
+    # print('---------Right before inputting into the model---------\n')
 
     # forward the model
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
-        # with torch.no_grad():
-        #     scores = model(return_loss=False, **data)[0]
+        with torch.no_grad():
+            scores = model(return_loss=False, **data)[0]
         # scores = model(return_loss=True, **data)
-        scores = model(return_loss=False, **data)[0]
         # print('scores len: ', len(scores))
         returned_features = h.layer_outputs if outputs else None
 
@@ -189,6 +188,8 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         return top5_label, returned_features
     # return top5_label
     return top5_label, score_tuples
+
+
 
 # def train_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
 def train_recognizer(model, video, class_label, outputs=None, as_tensor=True, **kwargs):
@@ -279,20 +280,17 @@ def train_recognizer(model, video, class_label, outputs=None, as_tensor=True, **
     if next(model.parameters()).is_cuda:
         # scatter to specified GPU
         data = scatter(data, [device])[0]
-    # data['label'] = class_label
+    data['label'] = class_label
 
-    print('class label: ', class_label)
-    print('data size: ', data['keypoint'].size())
-    print('---------Right before inputting into the model---------\n')
+    # print("data['label']: ", data['label'])
+    # print('data size: ', data['keypoint'].size())
+    # print('---------Right before inputting into the model---------\n')
 
     # forward the model
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
-        # with torch.no_grad():
-        #     scores = model(return_loss=False, **data)[0]
-        # loss = model(return_loss=True, **data)
-        loss = model(label=class_label, return_loss=True, **data)
-        # scores = model(return_loss=False, **data)[0]
-        print('\nloss: ', loss)
+        loss = model(return_loss=True, **data)
+        # loss = model(label=class_label, return_loss=True, **data)
+        # print('loss in train_recognizer(): ', loss)
         # print('scores len: ', len(scores))
 
     return loss['loss_cls']
