@@ -393,7 +393,7 @@ if __name__ == '__main__':
 
     #################################################################################################################
     #################################################################################################################
-    train = True
+    train = False
 
     device = torch.device('cuda')
 
@@ -424,6 +424,7 @@ if __name__ == '__main__':
     else:
         dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
 
+        # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
         GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
 
         for param in GCN_model.parameters():
@@ -451,7 +452,9 @@ if __name__ == '__main__':
 
     # optimizer
     # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
-    optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
+    # optimizer = torch.optim.SGD(GCN_model.cls_head.fc_cls.parameters(), lr=0.001)
+    # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
+    optimizer = torch.optim.Adam(GCN_model.parameters(), lr=0.002)
 
     # loss function
     # criterion = nn.CrossEntropyLoss()
@@ -459,7 +462,7 @@ if __name__ == '__main__':
 
     loss_list = []
     
-    epochs = 10
+    epochs = 20
     random_index = list(range(len(dataset)))
 
     for i in range(epochs):
@@ -489,6 +492,7 @@ if __name__ == '__main__':
 
             if train:
                 print('traininng')
+                GCN_model.cls_head.fc_cls.train()
                 # GCN_model.train()
                 optimizer.zero_grad()
 
