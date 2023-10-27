@@ -21,6 +21,7 @@ from collections import defaultdict
 import pathlib
 import random
 from matplotlib import pyplot as plt
+import matplotlib
 
 from pyskl.models.recognizers.recognizergcn import RecognizerGCN
 
@@ -348,180 +349,190 @@ class video_to_keypoint_dataset(Dataset):
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
-    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
-    parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--name', default='exp', help='save results to project/name')
+parser = argparse.ArgumentParser()
+parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
+parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
+parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
+parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
+parser.add_argument('--augment', action='store_true', help='augmented inference')
+parser.add_argument('--name', default='exp', help='save results to project/name')
 
-    # tracking args
-    parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
-    parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
-    parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
-    parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
-    parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
-    parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
-                        help="threshold for filtering out boxes of which aspect ratio are above the given value.")
-    parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
-    parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
-                        help="fuse score and iou for association")
+# tracking args
+parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
+parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
+parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
+parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
+parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
+parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
+                    help="threshold for filtering out boxes of which aspect ratio are above the given value.")
+parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
+parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
+                    help="fuse score and iou for association")
 
-    # CMC
-    parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
+# CMC
+parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
 
-    # ReID
-    parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
-    parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
-                        type=str, help="reid config file path")
-    parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
-                        type=str, help="reid config file path")
-    parser.add_argument('--proximity_thresh', type=float, default=0.5,
-                        help='threshold for rejecting low overlap reid matches')
-    parser.add_argument('--appearance_thresh', type=float, default=0.25,
-                        help='threshold for rejecting low appearance similarity reid matches')
+# ReID
+parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
+parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
+                    type=str, help="reid config file path")
+parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
+                    type=str, help="reid config file path")
+parser.add_argument('--proximity_thresh', type=float, default=0.5,
+                    help='threshold for rejecting low overlap reid matches')
+parser.add_argument('--appearance_thresh', type=float, default=0.25,
+                    help='threshold for rejecting low appearance similarity reid matches')
 
-    opt = parser.parse_args()
+opt = parser.parse_args()
 
-    opt.jde = False
-    opt.ablation = False
+opt.jde = False
+opt.ablation = False
 
-    print(opt)
-    #check_requirements(exclude=('pycocotools', 'thop'))
+print(opt)
+#check_requirements(exclude=('pycocotools', 'thop'))
 
-    #################################################################################################################
-    #################################################################################################################
-    train = False
+#################################################################################################################
+#################################################################################################################
+train = True
 
-    device = torch.device('cuda')
+device = torch.device('cuda')
 
-    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
-    config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-    # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
+config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
+config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+# config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
 
-    if train:
-        config['model']['cls_head']['num_classes'] = 120
+if train:
+    config['model']['cls_head']['num_classes'] = 120
 
-        dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
+    dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
 
-        GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
 
-        for param in GCN_model.parameters():
-            param.requires_grad = False
+    for param in GCN_model.parameters():
+        param.requires_grad = False
 
-        GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-        # GCN_model.cls_head.fc_cls = nn.Sequential(
-        #     nn.Linear(GCN_model.cls_head.in_c, 120),
-        #     nn.ReLU(),
-        #     nn.Linear(120, 2),
-        # )
-        # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    # GCN_model.cls_head.fc_cls = nn.Sequential(
+    #     nn.Linear(GCN_model.cls_head.in_c, 120),
+    #     nn.ReLU(),
+    #     nn.Linear(120, 2),
+    # )
+    # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
 
-        for param in GCN_model.cls_head.fc_cls.parameters():
-            param.requires_grad = True
-    else:
-        dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
+    for param in GCN_model.cls_head.fc_cls.parameters():
+        param.requires_grad = True
+else:
+    dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
 
-        # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-        GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
 
-        for param in GCN_model.parameters():
-            param.requires_grad = False
+    for param in GCN_model.parameters():
+        param.requires_grad = False
 
-    GCN_model = GCN_model.to(device)
+GCN_model = GCN_model.to(device)
 
-    print('model head: ', GCN_model.cls_head)
+print('model head: ', GCN_model.cls_head)
 
-    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
-    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
-    fake_anno = dict(
-        frame_dir='',
-        label=-1,
-        img_shape=(0, 0),
-        # original_shape=(h, w),
-        start_index=0,
-        modality='Pose',
-        total_frames=0)
-    
-    #---------------------------for training part-----------------------------
+# label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
+fake_anno = dict(
+    frame_dir='',
+    label=-1,
+    img_shape=(0, 0),
+    # original_shape=(h, w),
+    start_index=0,
+    modality='Pose',
+    total_frames=0)
 
-    # if config.get('cudnn_benchmark', False):
-    #     torch.backends.cudnn.benchmark = True
+#---------------------------for training part-----------------------------
 
-    # optimizer
-    # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
-    # optimizer = torch.optim.SGD(GCN_model.cls_head.fc_cls.parameters(), lr=0.001)
-    # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
-    optimizer = torch.optim.Adam(GCN_model.parameters(), lr=0.002)
+# if config.get('cudnn_benchmark', False):
+#     torch.backends.cudnn.benchmark = True
 
-    # loss function
-    # criterion = nn.CrossEntropyLoss()
-    # criterion = nn.NLLLoss()
+# optimizer
+# optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
+# optimizer = torch.optim.SGD(GCN_model.cls_head.fc_cls.parameters(), lr=0.001)
+# optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
+optimizer = torch.optim.Adam(GCN_model.parameters(), lr=0.02)
 
-    loss_list = []
-    
-    epochs = 20
-    random_index = list(range(len(dataset)))
+# scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.01,step_size_up=5,mode="triangular2")
 
-    for i in range(epochs):
-        random.shuffle(random_index)
-        # print('random numbers', random_index)
+# loss function
+# criterion = nn.CrossEntropyLoss()
+# criterion = nn.NLLLoss()
 
-        # for index, data in enumerate(dataset):
-        for i in random_index:
-            data = dataset[i]
-        #     index = i
+loss_list = []
 
-            pred_keypoints, pred_keypoints_score, pred_class, pred_class_name = data[0], data[1], data[2], data[3]
+epochs = 5
+random_index = list(range(len(dataset)))
 
-            pred_class = torch.tensor([pred_class], dtype=torch.int64).to(device)
+for i in range(epochs):
+    random.shuffle(random_index)
+    # print('random numbers', random_index)
 
-            # print('index: ', index)
-            # print('keypoints shape: ', pred_keypoints.shape)
-            # print('keypoints_score shape: ', pred_keypoints_score.shape)
-            # print('class: ', pred_class)
-            # print('class name: ', pred_class_name)
+    # for index, data in enumerate(dataset):
+    for i in random_index:
+        data = dataset[i]
+    #     index = i
 
-            # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
-            fake_anno['keypoint'] = pred_keypoints
-            fake_anno['keypoint_score'] = pred_keypoints_score
-            fake_anno['img_shape'] = (384, 640)
-            fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+        pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
 
-            if train:
-                print('traininng')
-                GCN_model.cls_head.fc_cls.train()
-                # GCN_model.train()
-                optimizer.zero_grad()
+        gt_class = torch.tensor([gt_class], dtype=torch.int64).to(device)
 
-                loss = train_GCN(GCN_model, fake_anno, pred_class)
+        # print('index: ', index)
+        # print('keypoints shape: ', pred_keypoints.shape)
+        # print('keypoints_score shape: ', pred_keypoints_score.shape)
+        # print('class: ', gt_class)
+        # print('class name: ', pred_class_name)
 
-                loss.backward()
-                optimizer.step()
-                print('ground truth: ', pred_class)
-                print('loss in main: ', loss, '\n')
+        # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
+        fake_anno['keypoint'] = pred_keypoints
+        fake_anno['keypoint_score'] = pred_keypoints_score
+        fake_anno['img_shape'] = (384, 640)
+        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
-                loss_list.append(loss.item())
+        if train:
+            print('traininng')
+            GCN_model.cls_head.fc_cls.train()
+            # GCN_model.train()
+            optimizer.zero_grad()
+
+            loss = train_GCN(GCN_model, fake_anno, gt_class)
+
+            loss.backward()
+            optimizer.step()
+
+            # scheduler.step()
+
+            print('ground truth: ', gt_class)
+            print('loss in main: ', loss, '\n')
+
+            loss_list.append(loss.item())
+        else:
+            GCN_model.eval()
+            print('inferencing')
+            pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
+
+            print('ground truth: ', gt_class)
+            print('predicted label: ', pred_label)
+            print('score: ', pred_scores)
+
+            _, pred_class = torch.max(pred_scores.data, 1)
+            if pred_class.item() == gt_class.item():
+                print('prediction was correct\n')
             else:
-                print('inferencing')
-                pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
-
-                print('ground truth: ', pred_class)
-                print('predicted label: ', pred_label)
-                print('score: ', pred_scores)
-            
-            # for param in GCN_model.cls_head.parameters():
-            #     print('param: ', param)
+                print('prediction was wrong')
+        
+        # for param in GCN_model.cls_head.parameters():
+        #     print('param: ', param)
 
 
-    if train:
-        print('loss list: ', loss_list)
+if train:
+    print('loss list: ', loss_list)
 
-        plt.plot(loss_list)
-        plt.show()
-
-        torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
-
+    matplotlib.use('TkAgg')
+    plt.plot(loss_list)
+    fig = plt.show()
+    # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 

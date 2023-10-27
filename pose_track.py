@@ -192,8 +192,11 @@ def GCN(fake_anno, GCN_model, label_map):
     #     total_frames=num_frame)
     
     # results = inference_recognizer(GCN_model, fake_anno)
-    results, not_used = inference_recognizer(GCN_model, fake_anno)
+    # GCN_model.eval()
+
+    results, scores = inference_recognizer(GCN_model, fake_anno)
     action_label = label_map[results[0][0]]
+    # print('scores: ', scores)
 
     return action_label
 
@@ -232,9 +235,10 @@ def detect():
     # source = '0'
     # source = './video/palace.mp4'
     # source = './video/ntu_sample.avi'
-    # source = './video/tennis.mp4'
+    source = './video/tennis.mp4'
     # source = './video/breakdance.mp4'
-    source = './video/human_fall_2.mp4'
+    # source = './video/human_fall_2.mp4'
+    # source = './video/soccer.mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -288,10 +292,13 @@ def detect():
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
     #                 = stgcnpp_ntu120_xsub_j_6633e6c4.pth
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+
     # args.label_map = tools/data/label_map/nturgbd_120.txt
     # Load label_map
-    label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
 
     fake_anno = dict(
         frame_dir='',
