@@ -36,6 +36,8 @@ from tracker.tracking_utils.timer import Timer
 
 from pyskl.apis import inference_recognizer, init_recognizer, train_recognizer
 
+matplotlib.use('TkAgg')
+
 # Parameters
 img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
 vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
@@ -349,6 +351,7 @@ class video_to_keypoint_dataset(Dataset):
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
 parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
@@ -397,142 +400,168 @@ train = True
 
 device = torch.device('cuda')
 
-config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
-config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-# config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
+dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
+#---------
 
-if train:
-    config['model']['cls_head']['num_classes'] = 120
+def main(lr, x, y):
 
-    dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
+    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
+    config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
+    # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
 
-    GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    if train:
+        config['model']['cls_head']['num_classes'] = 120
 
-    for param in GCN_model.parameters():
-        param.requires_grad = False
+        # dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
 
-    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-    # GCN_model.cls_head.fc_cls = nn.Sequential(
-    #     nn.Linear(GCN_model.cls_head.in_c, 120),
-    #     nn.ReLU(),
-    #     nn.Linear(120, 2),
-    # )
-    # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+        GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
 
-    for param in GCN_model.cls_head.fc_cls.parameters():
-        param.requires_grad = True
-else:
-    dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
+        for param in GCN_model.parameters():
+            param.requires_grad = False
 
-    # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-    GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+        GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+        # GCN_model.cls_head.fc_cls = nn.Sequential(
+        #     nn.Linear(GCN_model.cls_head.in_c, 120),
+        #     nn.ReLU(),
+        #     nn.Linear(120, 2),
+        # )
+        # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
 
-    for param in GCN_model.parameters():
-        param.requires_grad = False
+        for param in GCN_model.cls_head.fc_cls.parameters():
+            param.requires_grad = True
+    else:
+        # dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
 
-GCN_model = GCN_model.to(device)
+        # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+        GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
 
-print('model head: ', GCN_model.cls_head)
+        for param in GCN_model.parameters():
+            param.requires_grad = False
 
-# label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
-label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
-fake_anno = dict(
-    frame_dir='',
-    label=-1,
-    img_shape=(0, 0),
-    # original_shape=(h, w),
-    start_index=0,
-    modality='Pose',
-    total_frames=0)
+    GCN_model = GCN_model.to(device)
+
+    print('model head: ', GCN_model.cls_head)
+
+    # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
+    label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
+    fake_anno = dict(
+        frame_dir='',
+        label=-1,
+        img_shape=(0, 0),
+        # original_shape=(h, w),
+        start_index=0,
+        modality='Pose',
+        total_frames=0)
 
 #---------------------------for training part-----------------------------
+    # if config.get('cudnn_benchmark', False):
+    #     torch.backends.cudnn.benchmark = True
 
-# if config.get('cudnn_benchmark', False):
-#     torch.backends.cudnn.benchmark = True
+    # optimizer
+    # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
+    optimizer = torch.optim.Adam(GCN_model.parameters(), lr=lr)
 
-# optimizer
-# optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
-# optimizer = torch.optim.SGD(GCN_model.cls_head.fc_cls.parameters(), lr=0.001)
-# optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9)
-optimizer = torch.optim.Adam(GCN_model.parameters(), lr=0.02)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.01,step_size_up=5,mode="triangular2")
 
-# scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.01,step_size_up=5,mode="triangular2")
+    # loss function
+    # criterion = nn.CrossEntropyLoss()
+    # criterion = nn.NLLLoss()
 
-# loss function
-# criterion = nn.CrossEntropyLoss()
-# criterion = nn.NLLLoss()
+    loss_list = []
 
-loss_list = []
+    epochs = 10
+    random_index = list(range(len(dataset)))
 
-epochs = 5
-random_index = list(range(len(dataset)))
+    for i in range(epochs):
+        random.shuffle(random_index)
+        # print('random numbers', random_index)
 
-for i in range(epochs):
-    random.shuffle(random_index)
-    # print('random numbers', random_index)
+        # for index, data in enumerate(dataset):
+        for i in random_index:
+            data = dataset[i]
+        #     index = i
 
-    # for index, data in enumerate(dataset):
-    for i in random_index:
-        data = dataset[i]
-    #     index = i
+            pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
 
-        pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
+            gt_class = torch.tensor([gt_class], dtype=torch.int64).to(device)
 
-        gt_class = torch.tensor([gt_class], dtype=torch.int64).to(device)
+            # print('index: ', index)
+            # print('keypoints shape: ', pred_keypoints.shape)
+            # print('keypoints_score shape: ', pred_keypoints_score.shape)
+            # print('class: ', gt_class)
+            # print('class name: ', pred_class_name)
 
-        # print('index: ', index)
-        # print('keypoints shape: ', pred_keypoints.shape)
-        # print('keypoints_score shape: ', pred_keypoints_score.shape)
-        # print('class: ', gt_class)
-        # print('class name: ', pred_class_name)
+            # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
+            fake_anno['keypoint'] = pred_keypoints
+            fake_anno['keypoint_score'] = pred_keypoints_score
+            fake_anno['img_shape'] = (384, 640)
+            fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
-        # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
-        fake_anno['keypoint'] = pred_keypoints
-        fake_anno['keypoint_score'] = pred_keypoints_score
-        fake_anno['img_shape'] = (384, 640)
-        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+            if train:
+                print('traininng')
+                GCN_model.cls_head.fc_cls.train()
+                # GCN_model.train()
+                optimizer.zero_grad()
 
-        if train:
-            print('traininng')
-            GCN_model.cls_head.fc_cls.train()
-            # GCN_model.train()
-            optimizer.zero_grad()
+                loss = train_GCN(GCN_model, fake_anno, gt_class)
 
-            loss = train_GCN(GCN_model, fake_anno, gt_class)
+                loss.backward()
+                optimizer.step()
 
-            loss.backward()
-            optimizer.step()
+                # scheduler.step()
 
-            # scheduler.step()
+                print('ground truth: ', gt_class)
+                print('loss in main: ', loss, '\n')
 
-            print('ground truth: ', gt_class)
-            print('loss in main: ', loss, '\n')
-
-            loss_list.append(loss.item())
-        else:
-            GCN_model.eval()
-            print('inferencing')
-            pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
-
-            print('ground truth: ', gt_class)
-            print('predicted label: ', pred_label)
-            print('score: ', pred_scores)
-
-            _, pred_class = torch.max(pred_scores.data, 1)
-            if pred_class.item() == gt_class.item():
-                print('prediction was correct\n')
+                loss_list.append(loss.item())
             else:
-                print('prediction was wrong')
+                GCN_model.eval()
+                print('inferencing')
+                pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
+
+                print('ground truth: ', gt_class)
+                print('predicted label: ', pred_label)
+                print('score: ', pred_scores)
+
+                _, pred_class = torch.max(pred_scores.data, 1)
+                if pred_class.item() == gt_class.item():
+                    print('prediction was correct\n')
+                else:
+                    print('prediction was wrong')
+            
+            # for param in GCN_model.cls_head.parameters():
+            #     print('param: ', param)
+
+
+    if train:
+        print('loss list: ', loss_list)
+        # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
+
+        title = 'Adam + lr = ' + str(lr)
+        axis[x, y].plot(loss_list, '-o')
+        axis[x, y].set_title(title, x=0.5, y=0.8)
+
         
-        # for param in GCN_model.cls_head.parameters():
-        #     print('param: ', param)
 
 
-if train:
-    print('loss list: ', loss_list)
+lst1 = list(np.linspace(0.001, 0.009, num=9))
+lst2 = list(np.linspace(0.01, 0.11, num=11))
+lst2 = [np.float64(f"{num:.3f}") for num in lst2]
+lst = lst1 + lst2
 
-    matplotlib.use('TkAgg')
-    plt.plot(loss_list)
-    fig = plt.show()
-    # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
+x, y = 0, 0
+num_plot_row = 4
+num_plot_col = 5
+figure, axis = plt.subplots(num_plot_row, num_plot_col)
 
+for lr in lst:
+    # print(lr)
+    main(lr, x, y)
+
+    if y < 4:
+            y += 1
+    else:
+        y = 0
+        x += 1
+
+plt.show()

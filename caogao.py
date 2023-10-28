@@ -104,6 +104,8 @@ def queue_vs_list():
 
 import torch
 import torch.nn as nn
+import random
+import numpy as py
 
 # # Correct way to use CrossEntropyLoss
 # loss = nn.CrossEntropyLoss()
@@ -148,18 +150,33 @@ import torch.nn as nn
 # print(target)
 # print(output)
 
-# random_index = list(range(5))
-# for i in range(5):
-#     random.shuffle(random_index)
-#     print('random numbers', random_index)
+lst1 = list(np.linspace(0.001, 0.009, num=9))
+lst2 = list(np.linspace(0.01, 0.11, num=11))
+lst2 = [np.float64(f"{num:.3f}") for num in lst2]
+lst = lst1 + lst2
+print(lst)
 
-if __name__ == '__main__':
-    lst = [1,2,3,4,5,6,7,8]
-    matplotlib.use('Agg')
+for num in lst:
+    print(type(num))
 
-    # Plot the list data
-    fig = plt.plot(lst)
-    print(fig)
+x = 0
+y = 0
 
-    # Show the plot
-    fig = plt.show()
+# figure, axis = plt.subplots(4, 5)
+
+# for i in range(len(lst)):
+#     random.shuffle(lst)
+#     print(lst)
+
+#     axis[x, y].plot(lst, '-o')
+#     axis[x, y].set_title(1, x=0.5, y=0.8)
+
+#     if y < 4:
+#         y += 1
+#     else:
+#     y = 0
+#     x += 1
+
+# plt.show()
+
+
