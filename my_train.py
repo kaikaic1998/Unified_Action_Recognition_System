@@ -119,11 +119,6 @@ class LoadImages:  # for inference
         return self.nf  # number of files
 
 #------------------------------------------------------------------------------------------------
-def train_GCN(GCN_model, fake_anno, class_label):
-    loss = train_recognizer(GCN_model, fake_anno, class_label)
-
-    return loss
-
 def run_GCN(GCN_model, fake_anno, label_map):
     results, all_result = inference_recognizer(GCN_model, fake_anno)
     all_scores = []
@@ -350,6 +345,66 @@ class video_to_keypoint_dataset(Dataset):
         
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
+def train_model(GCN_model, train_dataset, fake_anno, optimizer):
+    random_index = list(range(len(train_dataset)))
+    random.shuffle(random_index)
+
+    loss_sublist = []
+
+    for i in random_index:
+        data = train_dataset[i]
+
+        pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
+
+        gt_class = torch.tensor([gt_class], dtype=torch.int64).to(device)
+
+        fake_anno['keypoint'] = pred_keypoints
+        fake_anno['keypoint_score'] = pred_keypoints_score
+        fake_anno['img_shape'] = (384, 640)
+        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+
+        print('traininng')
+        GCN_model.cls_head.fc_cls.train()
+        # GCN_model.train()
+        optimizer.zero_grad()
+
+        loss = train_recognizer(GCN_model, fake_anno, gt_class)
+
+        loss.backward()
+        optimizer.step()
+
+        # scheduler.step()
+
+        print('ground truth: ', gt_class)
+        print('loss in main: ', loss, '\n')
+
+        loss_sublist.append(loss.item())
+    
+    return loss_sublist
+
+def val_model(GCN_model, val_dataset, fake_anno):
+    len_dataset = len(val_dataset)
+    random_index = list(range(len_dataset))
+    random.shuffle(random_index)
+
+    correct = 0
+
+    for i in random_index:
+        data = val_dataset[i]
+        pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
+
+        fake_anno['keypoint'] = pred_keypoints
+        fake_anno['keypoint_score'] = pred_keypoints_score
+        fake_anno['img_shape'] = (384, 640)
+        fake_anno['total_frames'] = pred_keypoints_score.shape[1]
+
+        GCN_model.eval()
+        
+        results, all_result = inference_recognizer(GCN_model, fake_anno)
+        
+        correct += (gt_class == results[0][0])
+
+    return correct / len_dataset
 
 
 parser = argparse.ArgumentParser()
@@ -400,7 +455,8 @@ train = True
 
 device = torch.device('cuda')
 
-dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
+train_dataset = video_to_keypoint_dataset(path='./dataset_train/', device=device)
+val_dataset = video_to_keypoint_dataset(path='./dataset_val/', device=device)
 #---------
 
 def main(lr, x, y):
@@ -468,91 +524,41 @@ def main(lr, x, y):
     # criterion = nn.NLLLoss()
 
     loss_list = []
+    accuracy_list = []
 
-    epochs = 10
-    random_index = list(range(len(dataset)))
+    epochs = 20
+    # random_index = list(range(len(train_dataset)))
 
-    for i in range(epochs):
-        random.shuffle(random_index)
-        # print('random numbers', random_index)
+    for _ in range(epochs):
+        loss_sublist = train_model(GCN_model, train_dataset, fake_anno, optimizer)
+        loss_list.append(np.mean(loss_sublist))
 
-        # for index, data in enumerate(dataset):
-        for i in random_index:
-            data = dataset[i]
-        #     index = i
-
-            pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
-
-            gt_class = torch.tensor([gt_class], dtype=torch.int64).to(device)
-
-            # print('index: ', index)
-            # print('keypoints shape: ', pred_keypoints.shape)
-            # print('keypoints_score shape: ', pred_keypoints_score.shape)
-            # print('class: ', gt_class)
-            # print('class name: ', pred_class_name)
-
-            # print('keypoints for fake_anno, shape: ', pred_keypoints.shape)
-            fake_anno['keypoint'] = pred_keypoints
-            fake_anno['keypoint_score'] = pred_keypoints_score
-            fake_anno['img_shape'] = (384, 640)
-            fake_anno['total_frames'] = pred_keypoints_score.shape[1]
-
-            if train:
-                print('traininng')
-                GCN_model.cls_head.fc_cls.train()
-                # GCN_model.train()
-                optimizer.zero_grad()
-
-                loss = train_GCN(GCN_model, fake_anno, gt_class)
-
-                loss.backward()
-                optimizer.step()
-
-                # scheduler.step()
-
-                print('ground truth: ', gt_class)
-                print('loss in main: ', loss, '\n')
-
-                loss_list.append(loss.item())
-            else:
-                GCN_model.eval()
-                print('inferencing')
-                pred_label, pred_scores = run_GCN(GCN_model, fake_anno, label_map)
-
-                print('ground truth: ', gt_class)
-                print('predicted label: ', pred_label)
-                print('score: ', pred_scores)
-
-                _, pred_class = torch.max(pred_scores.data, 1)
-                if pred_class.item() == gt_class.item():
-                    print('prediction was correct\n')
-                else:
-                    print('prediction was wrong')
-            
-            # for param in GCN_model.cls_head.parameters():
-            #     print('param: ', param)
-
+        accuracy = val_model(GCN_model, val_dataset, fake_anno)
+        accuracy_list.append(accuracy)
 
     if train:
         print('loss list: ', loss_list)
+        print("accuracy_list: ", accuracy_list)
         # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 
         title = 'Adam + lr = ' + str(lr)
-        axis[x, y].plot(loss_list, '-o')
+        axis[x, y].plot(loss_list, '-o', accuracy_list, '-o')
         axis[x, y].set_title(title, x=0.5, y=0.8)
-
-        
+        # axis.plot(loss_list, '-o', accuracy_list, '-o')
+        # axis.set_title(title, x=0.5, y=0.8)
 
 
 lst1 = list(np.linspace(0.001, 0.009, num=9))
 lst2 = list(np.linspace(0.01, 0.11, num=11))
 lst2 = [np.float64(f"{num:.3f}") for num in lst2]
 lst = lst1 + lst2
+# lst = [0.01]
 
 x, y = 0, 0
 num_plot_row = 4
 num_plot_col = 5
 figure, axis = plt.subplots(num_plot_row, num_plot_col)
+# figure, axis = plt.subplots()
 
 for lr in lst:
     # print(lr)

@@ -196,8 +196,8 @@ def GCN(fake_anno, GCN_model, label_map):
 
     results, scores = inference_recognizer(GCN_model, fake_anno)
     action_label = label_map[results[0][0]]
-    # print('scores: ', scores)
-
+    print('scores: ', scores)
+    print('results[0][0]: ', results[0][0])
     return action_label
 
 #--------------------------------------------------------------------------------------------
@@ -235,9 +235,9 @@ def detect():
     # source = '0'
     # source = './video/palace.mp4'
     # source = './video/ntu_sample.avi'
-    source = './video/tennis.mp4'
+    # source = './video/tennis.mp4'
     # source = './video/breakdance.mp4'
-    # source = './video/human_fall_2.mp4'
+    source = './video/human_fall_2.mp4'
     # source = './video/soccer.mp4'
 
     # Initialize
