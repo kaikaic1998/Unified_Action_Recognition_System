@@ -22,6 +22,7 @@ import pathlib
 import random
 from matplotlib import pyplot as plt
 import matplotlib
+import statistics
 
 from pyskl.models.recognizers.recognizergcn import RecognizerGCN
 
@@ -466,8 +467,6 @@ def main(lr, x, y):
     # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
 
     if train:
-        config['model']['cls_head']['num_classes'] = 120
-
         # dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
 
         GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
@@ -486,6 +485,8 @@ def main(lr, x, y):
         for param in GCN_model.cls_head.fc_cls.parameters():
             param.requires_grad = True
     else:
+        config['model']['cls_head']['num_classes'] = 2
+
         # dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
 
         # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
@@ -537,37 +538,46 @@ def main(lr, x, y):
         accuracy_list.append(accuracy)
 
     if train:
+        min_loss = min(loss_list)
+        min_acc = min(accuracy_list)
+        max_acc = max(accuracy_list)
+        mode_acc = statistics.mode(accuracy_list)
+
         print('loss list: ', loss_list)
         print("accuracy_list: ", accuracy_list)
         # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 
-        title = 'Adam + lr = ' + str(lr)
+        title = 'Adam lr = ' + str(lr) + '\nmin loss = ' + f"{min_loss:.2f}" + ',\nmin acc = ' + f"{min_acc:.2f}" + ', max acc = ' + f"{max_acc:.2f}" + '\nmode acc = ' + f"{mode_acc:.2f}"
+
         axis[x, y].plot(loss_list, '-o', accuracy_list, '-o')
-        axis[x, y].set_title(title, x=0.5, y=0.8)
+        axis[x, y].set_title(title, x=0.5, y=0.7)
+        axis[x, y].grid()
         # axis.plot(loss_list, '-o', accuracy_list, '-o')
         # axis.set_title(title, x=0.5, y=0.8)
 
 
 lst1 = list(np.linspace(0.001, 0.009, num=9))
 lst2 = list(np.linspace(0.01, 0.11, num=11))
-lst2 = [np.float64(f"{num:.3f}") for num in lst2]
+lst2 = [np.float64(f"{num:.2f}") for num in lst2]
 lst = lst1 + lst2
 # lst = [0.01]
 
-x, y = 0, 0
-num_plot_row = 4
-num_plot_col = 5
-figure, axis = plt.subplots(num_plot_row, num_plot_col)
-# figure, axis = plt.subplots()
+for loop in range(6):
+    x, y = 0, 0
+    num_plot_row = 4
+    num_plot_col = 5
+    figure, axis = plt.subplots(num_plot_row, num_plot_col)
+    figure.set_figheight(20)
+    figure.set_figwidth(40)
 
-for lr in lst:
-    # print(lr)
-    main(lr, x, y)
+    for lr in lst:
+        # print(lr)
+        main(lr, x, y)
 
-    if y < 4:
-            y += 1
-    else:
-        y = 0
-        x += 1
-
-plt.show()
+        if y < 4:
+                y += 1
+        else:
+            y = 0
+            x += 1
+    file_name = './plots/lr_Adam_' + str(loop) + '.jpg'
+    plt.savefig(file_name)

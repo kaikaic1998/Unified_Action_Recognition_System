@@ -156,28 +156,29 @@ lst2 = [np.float64(f"{num:.3f}") for num in lst2]
 lst = lst1 + lst2
 print(lst)
 
-
 x = 0
 y = 0
 
-figure, axis = plt.subplots()
-
-# for i in range(len(lst)):
 random.shuffle(lst)
+
+figure, axis = plt.subplots(2, 2)
+
+figure.set_figheight(30)
+figure.set_figwidth(30)
+
 
 diff_list = list(range(len(lst)))
 
-# axis[x, y].plot(lst, '-o')
-# axis[x, y].set_title(1, x=0.5, y=0.8)
-axis.plot(lst, '-o', diff_list, '-o')
-axis.set_title(1, x=0.5, y=0.8)
+axis[0, 0].plot(lst, '-o')
+axis[0, 0].set_title(1, x=0.5, y=0.9)
+axis[0, 0].text(0.5, 0.7, 'hello') 
+axis[0, 0].grid()
 
-    # if y < 4:
-    #     y += 1
-    # else:
-    # y = 0
-    # x += 1
+axis[0, 1].plot(diff_list, '-o')
+axis[0, 1].set_title(1, x=0.5, y=0.9)
+axis[0, 1].text(0.5, 0.7, 'hello') 
+axis[0, 1].grid()
 
-plt.show()
+plt.savefig('./plots/test.jpg')
 
 
