@@ -547,7 +547,11 @@ def main(lr, x, y):
         print("accuracy_list: ", accuracy_list)
         # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 
-        title = 'Adam lr = ' + str(lr) + '\nmin loss = ' + f"{min_loss:.2f}" + ',\nmin acc = ' + f"{min_acc:.2f}" + ', max acc = ' + f"{max_acc:.2f}" + '\nmode acc = ' + f"{mode_acc:.2f}"
+        title = ('Adam lr = ' + str(lr) 
+                 + '\nmin loss = ' + f"{min_loss:.2f}" 
+                 + ',\nmin acc = ' + f"{min_acc:.2f}" 
+                 + ', max acc = ' + f"{max_acc:.2f}" 
+                 + '\nmode acc = ' + f"{mode_acc:.2f}")
 
         axis[x, y].plot(loss_list, '-o', accuracy_list, '-o')
         axis[x, y].set_title(title, x=0.5, y=0.7)
