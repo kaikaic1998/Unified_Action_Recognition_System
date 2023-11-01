@@ -168,15 +168,10 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         # scatter to specified GPU
         data = scatter(data, [device])[0]
 
-    # print('data size: ', data['keypoint'].size())
-    # print('---------Right before inputting into the model---------\n')
-
     # forward the model
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
         with torch.no_grad():
             scores = model(return_loss=False, **data)[0]
-        # scores = model(return_loss=True, **data)
-        # print('scores len: ', len(scores))
         returned_features = h.layer_outputs if outputs else None
 
     num_classes = scores.shape[-1]
@@ -186,8 +181,8 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
     top5_label = score_sorted[:5]
     if outputs:
         return top5_label, returned_features
-    # return top5_label
-    return top5_label, score_tuples
+
+    return top5_label
 
 
 
@@ -280,17 +275,11 @@ def train_recognizer(model, video, class_label, outputs=None, as_tensor=True, **
     if next(model.parameters()).is_cuda:
         # scatter to specified GPU
         data = scatter(data, [device])[0]
-    data['label'] = class_label
 
-    # print("data['label']: ", data['label'])
-    # print('data size: ', data['keypoint'].size())
-    # print('---------Right before inputting into the model---------\n')
+    data['label'] = class_label
 
     # forward the model
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
         loss = model(return_loss=True, **data)
-        # loss = model(label=class_label, return_loss=True, **data)
-        # print('loss in train_recognizer(): ', loss)
-        # print('scores len: ', len(scores))
 
     return loss['loss_cls']

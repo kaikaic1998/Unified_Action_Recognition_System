@@ -194,10 +194,8 @@ def GCN(fake_anno, GCN_model, label_map):
     # results = inference_recognizer(GCN_model, fake_anno)
     # GCN_model.eval()
 
-    results, scores = inference_recognizer(GCN_model, fake_anno)
+    results= inference_recognizer(GCN_model, fake_anno)
     action_label = label_map[results[0][0]]
-    print('scores: ', scores)
-    print('results[0][0]: ', results[0][0])
     return action_label
 
 #--------------------------------------------------------------------------------------------
@@ -233,12 +231,14 @@ def detect():
     imgsz = 640
 
     # source = '0'
-    # source = './video/palace.mp4'
     # source = './video/ntu_sample.avi'
     # source = './video/tennis.mp4'
-    # source = './video/breakdance.mp4'
-    source = './video/human_fall_2.mp4'
-    # source = './video/soccer.mp4'
+    # source = './video/human_fall_3.mp4'
+    # source = './video/human_fall_2.mp4'
+    # source = './video/knee.mp4'
+    # source = './video/fall.mp4'
+    # source = './video/scratch.avi'
+    source = './dataset_train/fall/video (1).mp4'
 
     # Initialize
     device = torch.device('cuda')
@@ -286,15 +286,17 @@ def detect():
             break
     video.release()
 
-    num_input_to_GCN = 20
+    len_of_sliding_window = int(num_total_frames/3) - 10
 
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     # args.checkpoint = http://download.openmmlab.com/mmaction/pyskl/ckpt/stgcnpp/stgcnpp_ntu120_xsub_hrnet/j.pth
     #                 = stgcnpp_ntu120_xsub_j_6633e6c4.pth
     # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-    GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+    config['model']['cls_head']['num_classes'] = 2
 
+    GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
+    
     # args.label_map = tools/data/label_map/nturgbd_120.txt
     # Load label_map
     # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
@@ -307,7 +309,7 @@ def detect():
         # original_shape=(h, w),
         start_index=0,
         modality='Pose',
-        total_frames=num_input_to_GCN)
+        total_frames=len_of_sliding_window)
     #--------------------------------------------------------------------------------------
 
     # Run inference
@@ -406,7 +408,7 @@ def detect():
                         deque_len_of_this_id = len(keypoints_score_dict[tid])
                         print('deque_len_of_this_id: ', deque_len_of_this_id)
 
-                        if deque_len_of_this_id >= num_input_to_GCN:
+                        if deque_len_of_this_id >= len_of_sliding_window:
                             keypoints_dict[tid].popleft()
                             keypoints_score_dict[tid].popleft()
 
@@ -426,6 +428,7 @@ def detect():
 
                 # # action label for every tracked person
                 action_label_dict[tid] = action_label
+                print('predicted action: ', action_label)
 
                 label = f'{tid}, {action_label_dict[tid]}'
                 plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)

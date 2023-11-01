@@ -10,30 +10,21 @@ class RecognizerGCN(BaseRecognizer):
     """GCN-based recognizer for skeleton-based action recognition. """
 
     def forward_train(self, keypoint, label, **kwargs):
-    # def forward_train(self, keypoint, **kwargs):
         """Defines the computation performed at every call when training."""
-        # print('keypoint shape: ', keypoint.shape)
         assert self.with_cls_head
         assert keypoint.shape[1] == 1
-        # keypoint = keypoint[:, 0]
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
 
-        # print('train keypoint after: ', keypoint.shape)
-
         losses = dict()
         x = self.extract_feat(keypoint)
-        # print('self.cls_head: ', self.cls_head)
         cls_score = self.cls_head(x)
 
-        m = torch.nn.Softmax(dim=1)
-        print('softmax scores: ', m(cls_score))
-
-        print('cls_score: ', cls_score)
-        # print('label in forward train: ', label)
+        # m = torch.nn.Softmax(dim=1)
+        # print('softmax scores: ', m(cls_score))
+        # print('cls_score: ', cls_score)
 
         loss = self.cls_head.loss(cls_score, label)
-        # print('loss in forward_train(): ', loss)
 
         losses.update(loss)
 
@@ -42,11 +33,10 @@ class RecognizerGCN(BaseRecognizer):
     def forward_test(self, keypoint, **kwargs):
         """Defines the computation performed at every call when evaluation and
         testing."""
-        # print('keypoint shape: ', keypoint.shape)
+
         assert self.with_cls_head or self.feat_ext
         bs, nc = keypoint.shape[:2]
         keypoint = keypoint.reshape((bs * nc, ) + keypoint.shape[2:])
-        # print('keypoint after: ', keypoint.shape)
 
         x = self.extract_feat(keypoint)
         feat_ext = self.test_cfg.get('feat_ext', False)

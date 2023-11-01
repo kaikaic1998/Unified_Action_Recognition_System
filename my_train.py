@@ -120,18 +120,6 @@ class LoadImages:  # for inference
         return self.nf  # number of files
 
 #------------------------------------------------------------------------------------------------
-def run_GCN(GCN_model, fake_anno, label_map):
-    results, all_result = inference_recognizer(GCN_model, fake_anno)
-    all_scores = []
-    for i in range(len(all_result)):
-        all_scores.append(all_result[i][1])
-
-    all_scores = torch.tensor([all_scores], requires_grad=True)
-    action_label = label_map[results[0][0]]
-
-    return action_label, all_scores
-
-#--------------------------------------------------------------------------------------------
 def output_to_keypoint_and_detections(output):
     # Convert model output to target format [batch_id, class_id, x, y, w, h, conf]
     targets = []
@@ -153,7 +141,7 @@ def output_to_keypoint_and_detections(output):
 
 
     return np.array(targets), np.array(detections)
-#---------------------------------------------------------------------------------------------
+
 
 class video_to_keypoint_dataset(Dataset):
     def __init__(self, path, device):
@@ -162,7 +150,7 @@ class video_to_keypoint_dataset(Dataset):
         self.paths = list(pathlib.Path(path).glob("*/*.*"))
         self.classes, self.class_to_idx = self.find_class(path)
 
-        self.all_keypoints, self.all_keypoints_score = self.get_all_keypoints_from_all_video()
+        self.all_keypoints, self.all_keypoints_score, self.image_shape = self.get_all_keypoints_from_all_video()
 
     def find_class(self, class_path):
             class_names = os.listdir(class_path)
@@ -173,7 +161,6 @@ class video_to_keypoint_dataset(Dataset):
         class_name = os.path.basename(os.path.dirname(self.paths[index]))
         class_index = self.class_to_idx[class_name]
         
-        # return (skeleton of this video, class_of_this_index)
         return (self.all_keypoints[index], self.all_keypoints_score[index], class_index, class_name)
     
     def __len__(self):
@@ -186,13 +173,21 @@ class video_to_keypoint_dataset(Dataset):
         with torch.no_grad():
             model, tracker, stride, imgsz = self.init_track_pose(self.device)
 
+            # get processed image shape for later use
+            first_video = cv2.VideoCapture(str(self.paths[0]))
+            temp_img = first_video.read()[1]
+            h, w, _ = letterbox(temp_img, imgsz, stride=stride)[0].shape
+            image_shape = (h, w)
+            first_video.release()
+
+            # get keypoints info from all videos
             for video_path in self.paths:
                 print('Generating keypoints data for: ', video_path)
                 keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, self.device, model, tracker, stride, imgsz)
                 all_keypoints.append(keypoints_of_one_video)
                 all_keypoints_score.append(keypoints_score_of_one_video)
 
-        return all_keypoints, all_keypoints_score
+        return all_keypoints, all_keypoints_score, image_shape
    
     def init_track_pose(self, device):
         sys.path.insert(0, 'yolov7')
@@ -229,8 +224,7 @@ class video_to_keypoint_dataset(Dataset):
     def keypoints_of_one_video(self, source, device, model, tracker, stride, imgsz):
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
-        num_total_frames = dataset.nframes
-        num_input_to_GCN = int(num_total_frames/3) - 6
+        len_of_sliding_window = int(dataset.nframes/3) - 5
 
         colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
 
@@ -273,6 +267,9 @@ class video_to_keypoint_dataset(Dataset):
             nimg = nimg.cpu().numpy().astype(np.uint8)
             # # nimg: numpy array (384, 640, 3)
 
+            # for idx in range(detections.shape[0]):
+            #     plot_skeleton_kpts(nimg, detections[idx][5:].T, 3)
+
             # image tpye for tracker should be numpy array, in format of (height, length, 3)
             online_targets = tracker.update(detections, nimg)
 
@@ -311,7 +308,7 @@ class video_to_keypoint_dataset(Dataset):
                             deque_len_of_this_id = len(keypoints_score_dict[tid])
                             # print('deque_len_of_this_id: ', deque_len_of_this_id)
 
-                            if deque_len_of_this_id >= num_input_to_GCN:
+                            if deque_len_of_this_id >= len_of_sliding_window:
                                 keypoints_dict[tid].popleft()
                                 keypoints_score_dict[tid].popleft()
 
@@ -328,12 +325,9 @@ class video_to_keypoint_dataset(Dataset):
                             id_list.append(tid)
                             keypoints_dict[tid] = deque([keypoints])
                             keypoints_score_dict[tid] = deque([keypoints_score])
-
-                    # # action label for every tracked person
-                    # action_label_dict[tid] = action_label
-
-                    label = f'{tid}'
-                    plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+                    
+                    # label = f'{tid}'
+                    # plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
             # cv2.imshow('', nimg)
             # cv2.waitKey(1)  # 1 millisecond
             #---------------------------------------------------------------------
@@ -346,7 +340,11 @@ class video_to_keypoint_dataset(Dataset):
         
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
+
+
 def train_model(GCN_model, train_dataset, fake_anno, optimizer):
+    image_shape = train_dataset.image_shape
+
     random_index = list(range(len(train_dataset)))
     random.shuffle(random_index)
 
@@ -361,12 +359,11 @@ def train_model(GCN_model, train_dataset, fake_anno, optimizer):
 
         fake_anno['keypoint'] = pred_keypoints
         fake_anno['keypoint_score'] = pred_keypoints_score
+        # fake_anno['img_shape'] = image_shape
         fake_anno['img_shape'] = (384, 640)
         fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
-        print('traininng')
         GCN_model.cls_head.fc_cls.train()
-        # GCN_model.train()
         optimizer.zero_grad()
 
         loss = train_recognizer(GCN_model, fake_anno, gt_class)
@@ -374,35 +371,33 @@ def train_model(GCN_model, train_dataset, fake_anno, optimizer):
         loss.backward()
         optimizer.step()
 
-        # scheduler.step()
-
-        print('ground truth: ', gt_class)
-        print('loss in main: ', loss, '\n')
-
         loss_sublist.append(loss.item())
     
     return loss_sublist
 
 def val_model(GCN_model, val_dataset, fake_anno):
+    image_shape = train_dataset.image_shape
+
     len_dataset = len(val_dataset)
-    random_index = list(range(len_dataset))
-    random.shuffle(random_index)
 
     correct = 0
 
-    for i in random_index:
-        data = val_dataset[i]
+    for data in val_dataset:
         pred_keypoints, pred_keypoints_score, gt_class, gt_class_name = data[0], data[1], data[2], data[3]
 
         fake_anno['keypoint'] = pred_keypoints
         fake_anno['keypoint_score'] = pred_keypoints_score
+        # fake_anno['img_shape'] = image_shape
         fake_anno['img_shape'] = (384, 640)
         fake_anno['total_frames'] = pred_keypoints_score.shape[1]
 
         GCN_model.eval()
         
-        results, all_result = inference_recognizer(GCN_model, fake_anno)
-        
+        results = inference_recognizer(GCN_model, fake_anno)
+        print('\nresults: ', results)
+        print('ground truth: ', gt_class)
+        print('is it correct? ', gt_class == results[0][0])
+
         correct += (gt_class == results[0][0])
 
     return correct / len_dataset
@@ -464,8 +459,8 @@ def main(lr, x, y):
 
     config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-    # config.data.train.pipeline = [x for x in config.data.train.pipeline if x['type'] != 'DecompressPose']
-
+    config.data.test.pipeline[2].pop('num_clips')
+    
     if train:
         # dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
 
@@ -496,8 +491,6 @@ def main(lr, x, y):
             param.requires_grad = False
 
     GCN_model = GCN_model.to(device)
-
-    print('model head: ', GCN_model.cls_head)
 
     # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
     label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
@@ -530,12 +523,14 @@ def main(lr, x, y):
     epochs = 20
     # random_index = list(range(len(train_dataset)))
 
-    for _ in range(epochs):
+    for epoch in range(epochs):
         loss_sublist = train_model(GCN_model, train_dataset, fake_anno, optimizer)
         loss_list.append(np.mean(loss_sublist))
 
         accuracy = val_model(GCN_model, val_dataset, fake_anno)
         accuracy_list.append(accuracy)
+
+        # print('Epoch ', epoch+1, ' done.')
 
     if train:
         min_loss = min(loss_list)
@@ -564,9 +559,9 @@ lst1 = list(np.linspace(0.001, 0.009, num=9))
 lst2 = list(np.linspace(0.01, 0.11, num=11))
 lst2 = [np.float64(f"{num:.2f}") for num in lst2]
 lst = lst1 + lst2
-# lst = [0.01]
+lst = [0.01]
 
-for loop in range(6):
+for loop in range(1):
     x, y = 0, 0
     num_plot_row = 4
     num_plot_col = 5
@@ -583,5 +578,7 @@ for loop in range(6):
         else:
             y = 0
             x += 1
-    file_name = './plots/lr_Adam_' + str(loop) + '.jpg'
-    plt.savefig(file_name)
+    # file_name = './plots/lr_Adam_' + str(loop) + '.jpg'
+    # file_name = './plots/lr_Adam.jpg'
+    plt.show()
+    # plt.savefig(file_name)
