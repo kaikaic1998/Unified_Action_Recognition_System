@@ -249,10 +249,13 @@ def input_video_output_resize_video():
     def func(image):
         h, w, _ = image.shape
         want_width = 1920
-        pad_width = int((1920 - w)/2)
+        pad_width = int((want_width - w)/2)
 
-        top = 0
-        bottom = 0
+        want_height = 1280
+        pad_height = int((want_height - h)/2)
+
+        top = pad_height
+        bottom = pad_height
         left = pad_width
         right = pad_width
 
@@ -268,7 +271,7 @@ def input_video_output_resize_video():
     resized_image = []
     # w, h = 854, 480
 
-    video_name = './dataset_train/fall/video (5).mp4'
+    video_name = './dataset_train/notfall/video (5).mp4'
 
     video = cv2.VideoCapture(video_name)
     while(True):

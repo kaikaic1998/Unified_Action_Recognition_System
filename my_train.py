@@ -43,6 +43,43 @@ matplotlib.use('TkAgg')
 img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
 vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
+def args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
+    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
+    parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
+    parser.add_argument('--augment', action='store_true', help='augmented inference')
+    parser.add_argument('--name', default='exp', help='save results to project/name')
+
+    # tracking args
+    parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
+    parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
+    parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
+    parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
+    parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
+    parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
+                        help="threshold for filtering out boxes of which aspect ratio are above the given value.")
+    parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
+    parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
+                        help="fuse score and iou for association")
+
+    # CMC
+    parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
+
+    # ReID
+    parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
+    parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
+                        type=str, help="reid config file path")
+    parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
+                        type=str, help="reid config file path")
+    parser.add_argument('--proximity_thresh', type=float, default=0.5,
+                        help='threshold for rejecting low overlap reid matches')
+    parser.add_argument('--appearance_thresh', type=float, default=0.25,
+                        help='threshold for rejecting low appearance similarity reid matches')
+    
+    return parser.parse_args()
+
 class LoadImages:  # for inference
     def __init__(self, path, img_size=640, stride=32):
         p = str(Path(path).absolute())  # os-agnostic absolute path
@@ -403,41 +440,41 @@ def val_model(GCN_model, val_dataset, fake_anno):
     return correct / len_dataset
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
-parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
-parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
-parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
-parser.add_argument('--augment', action='store_true', help='augmented inference')
-parser.add_argument('--name', default='exp', help='save results to project/name')
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
+# parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
+# parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
+# parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
+# parser.add_argument('--augment', action='store_true', help='augmented inference')
+# parser.add_argument('--name', default='exp', help='save results to project/name')
 
-# tracking args
-parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
-parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
-parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
-parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
-parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
-parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
-                    help="threshold for filtering out boxes of which aspect ratio are above the given value.")
-parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
-parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
-                    help="fuse score and iou for association")
+# # tracking args
+# parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
+# parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
+# parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
+# parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
+# parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
+# parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
+#                     help="threshold for filtering out boxes of which aspect ratio are above the given value.")
+# parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
+# parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
+#                     help="fuse score and iou for association")
 
-# CMC
-parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
+# # CMC
+# parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
 
-# ReID
-parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
-parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
-                    type=str, help="reid config file path")
-parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
-                    type=str, help="reid config file path")
-parser.add_argument('--proximity_thresh', type=float, default=0.5,
-                    help='threshold for rejecting low overlap reid matches')
-parser.add_argument('--appearance_thresh', type=float, default=0.25,
-                    help='threshold for rejecting low appearance similarity reid matches')
+# # ReID
+# parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
+# parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
+#                     type=str, help="reid config file path")
+# parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
+#                     type=str, help="reid config file path")
+# parser.add_argument('--proximity_thresh', type=float, default=0.5,
+#                     help='threshold for rejecting low overlap reid matches')
+# parser.add_argument('--appearance_thresh', type=float, default=0.25,
+#                     help='threshold for rejecting low appearance similarity reid matches')
 
-opt = parser.parse_args()
+opt = args()
 
 opt.jde = False
 opt.ablation = False

@@ -20,10 +20,6 @@ class RecognizerGCN(BaseRecognizer):
         x = self.extract_feat(keypoint)
         cls_score = self.cls_head(x)
 
-        # m = torch.nn.Softmax(dim=1)
-        # print('softmax scores: ', m(cls_score))
-        # print('cls_score: ', cls_score)
-
         loss = self.cls_head.loss(cls_score, label)
 
         losses.update(loss)
