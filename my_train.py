@@ -45,6 +45,15 @@ vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # accep
 
 def args():
     parser = argparse.ArgumentParser()
+
+    # general args
+    parser.add_argument('--device', default=torch.device('cuda'))
+    parser.add_argument('--yolo-model-path', default='./pretrained/yolov7-w6-pose.pt', help='path of the pretrained YOLO model')
+    parser.add_argument('--show-img', default=False, help='Show tracking and keypoints when loading datasets')
+    parser.add_argument('--stgcn-config', default='configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py', help='config for pretrained STGCN model')
+    parser.add_argument('--stgcn-path', default='.cache/stgcnpp_ntu120_xset_hrnet.pth', help='pretrained STGCN model path')
+
+    # detector args
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
@@ -79,6 +88,7 @@ def args():
                         help='threshold for rejecting low appearance similarity reid matches')
     
     return parser.parse_args()
+
 
 class LoadImages:  # for inference
     def __init__(self, path, img_size=640, stride=32):
@@ -156,33 +166,14 @@ class LoadImages:  # for inference
     def __len__(self):
         return self.nf  # number of files
 
-#------------------------------------------------------------------------------------------------
-def output_to_keypoint_and_detections(output):
-    # Convert model output to target format [batch_id, class_id, x, y, w, h, conf]
-    targets = []
-    detections = []
-
-    for i, o in enumerate(output):
-        kpts = o[:,6:]
-        o = o[:,:6] # all detected boxes, format: tensor([ [box_coordinates_xyxy, confidence, class] x #of detections ]) 
-        # detections.append(o.cpu().numpy())
-        for index, (*box, conf, cls) in enumerate(o.detach().cpu().numpy()):
-            # box = the bounding box in form of x1 y1 x2 y2,  where xy1=top-left, xy2=bottom-right
-            # xyxy2xywh() converts nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] where xy1=top-left, xy2=bottom-right
-            targets.append([i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf, *list(kpts.detach().cpu().numpy()[index])])
-            # print('keypoints: ', list(kpts.detach().cpu().numpy()[index]))
-            # print('index: ', index)
-            # cls = sum(list(kpts.detach().cpu().numpy()[index]))/len(list(kpts.detach().cpu().numpy()[index]))
-            # detections.append([*box, conf, cls])
-            detections.append([*box, conf, *(list(kpts.detach().cpu().numpy()[index]))])
-
-
-    return np.array(targets), np.array(detections)
-
 
 class video_to_keypoint_dataset(Dataset):
-    def __init__(self, path, device):
+    def __init__(self, path, device, yolo_model_path, opt, show_img, imgsz=640):
         self.device = device
+        self.imgsz = imgsz
+        self.yolo_model_path = yolo_model_path
+        self.show_img = show_img
+        self.opt = opt
         self.path = path
         self.paths = list(pathlib.Path(path).glob("*/*.*"))
         self.classes, self.class_to_idx = self.find_class(path)
@@ -208,32 +199,26 @@ class video_to_keypoint_dataset(Dataset):
         all_keypoints_score = []
 
         with torch.no_grad():
-            model, tracker, stride, imgsz = self.init_track_pose(self.device)
+            model, tracker, stride, imgsz = self.init_track_pose(self.device, self.imgsz, self.yolo_model_path, self.opt)
 
-            # get processed image shape for later use
-            first_video = cv2.VideoCapture(str(self.paths[0]))
-            temp_img = first_video.read()[1]
-            h, w, _ = letterbox(temp_img, imgsz, stride=stride)[0].shape
-            image_shape = (h, w)
-            first_video.release()
+        # get processed image shape for later use
+        first_video = cv2.VideoCapture(str(self.paths[0]))
+        temp_img = first_video.read()[1]
+        h, w, _ = letterbox(temp_img, imgsz, stride=stride)[0].shape
+        image_shape = (h, w)
+        first_video.release()
 
-            # get keypoints info from all videos
-            for video_path in self.paths:
-                print('Generating keypoints data for: ', video_path)
-                keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, self.device, model, tracker, stride, imgsz)
-                all_keypoints.append(keypoints_of_one_video)
-                all_keypoints_score.append(keypoints_score_of_one_video)
+        # get keypoints info from all videos
+        for video_path in self.paths:
+            print('Generating keypoints data for: ', video_path)
+            keypoints_of_one_video, keypoints_score_of_one_video = self.keypoints_of_one_video(video_path, self.device, model, tracker, stride, imgsz, self.show_img, self.opt)
+            all_keypoints.append(keypoints_of_one_video)
+            all_keypoints_score.append(keypoints_score_of_one_video)
 
         return all_keypoints, all_keypoints_score, image_shape
    
-    def init_track_pose(self, device):
+    def init_track_pose(self, device, imgsz, model_path, opt):
         sys.path.insert(0, 'yolov7')
-        
-        # weights = 'yolov7.pt'
-        imgsz = 640
-
-        # Load model
-        model_path = './pretrained/yolov7-w6-pose.pt'
 
         weigths = torch.load(model_path, map_location=device)
         model = weigths['model']
@@ -258,25 +243,22 @@ class video_to_keypoint_dataset(Dataset):
 
         return model, tracker, stride, imgsz
 
-    def keypoints_of_one_video(self, source, device, model, tracker, stride, imgsz):
+    def keypoints_of_one_video(self, source, device, model, tracker, stride, imgsz, show_img, opt):
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
         len_of_sliding_window = int(dataset.nframes/3) - 5
 
-        colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
+        if show_img:
+            colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
 
         id_list = []
         keypoints_dict = dict()
         keypoints_score_dict = dict()
-        action_label_dict = dict()
         online_ids = defaultdict(int)
-        action_label = ''
 
         for path, img, im0, vid_cap in dataset: # one dataset = one frame
             # img: numpy array (384, 640, 3)
-            #--------------------------------------------------------------
             # change img type from numpy to tensor
-            # so can feed img to GPU, to speed up inference speed
             img = torch.from_numpy(img).to(device)
             img = img.half() if (device.type != 'cpu') else img.float()  # uint8 to fp16/32
             img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -285,35 +267,25 @@ class video_to_keypoint_dataset(Dataset):
             img = img.permute(0,3,1,2)
             with torch.no_grad():
                 output, _ = model(img)
-            #--------------------------------------------------------------
             # img: tensor, torch.Size([1, 3, 384, 640])
-
-            # with torch.no_grad():   # Calculating gradients would cause a GPU memory leak
-                # pred = model(img, augment=opt.augment)[0] # opt.augment value is False here
 
             # Apply NMS
             output = non_max_suppression_kpt(output, 0.25, 0.65, nc=model.yaml['nc'], nkpt=model.yaml['nkpt'], kpt_label=True)
 
             with torch.no_grad():
-                # output = all keypoints in 1 frame
-                # detections = all bbox in 1 frame, in form of [[*box, conf, cls], x num_bbox]
-                targets, detections = output_to_keypoint_and_detections(output)
+                detections = output_to_keypoint_and_detections(output)
 
             # img: tensor, torch.Size([1, 3, 384, 640])
             nimg = img[0].permute(1, 2, 0) * 255
             nimg = nimg.cpu().numpy().astype(np.uint8)
             # # nimg: numpy array (384, 640, 3)
 
-            # for idx in range(detections.shape[0]):
-            #     plot_skeleton_kpts(nimg, detections[idx][5:].T, 3)
+            if show_img:
+                for idx in range(detections.shape[0]):
+                    plot_skeleton_kpts(nimg, detections[idx][5:].T, 3)
 
             # image tpye for tracker should be numpy array, in format of (height, length, 3)
             online_targets = tracker.update(detections, nimg)
-
-            # online_tlwhs = []
-            # online_ids = []
-            # online_scores = []
-            # online_cls = []
 
             for t in online_targets:
                 tlwh = t.tlwh # used for filtering out small boxes
@@ -334,10 +306,7 @@ class video_to_keypoint_dataset(Dataset):
                 #---------------------------------------------------------------------------------------------
 
                 if tlwh[2] * tlwh[3] > opt.min_box_area: # filter out small boxes
-                    # online_tlwhs.append(tlwh)
-                    # online_ids.append(tid)
                     online_ids[tid] += 1
-                    # online_scores.append(t.score)
 
                     if online_ids[tid] >= 3:
                         online_ids[tid] = 0
@@ -351,10 +320,6 @@ class video_to_keypoint_dataset(Dataset):
 
                                 keypoints_dict[tid].append(keypoints)
                                 keypoints_score_dict[tid].append(keypoints_score)
-                                # fake_anno['keypoint'] = np.array([keypoints_dict[tid]])
-                                # fake_anno['keypoint_score'] = np.array([keypoints_score_dict[tid]])
-                                # fake_anno['img_shape'] = (h, w)
-                                # action_label = GCN(fake_anno, GCN_model, label_map)
                             else:
                                 keypoints_dict[tid].append(keypoints)
                                 keypoints_score_dict[tid].append(keypoints_score)
@@ -363,10 +328,13 @@ class video_to_keypoint_dataset(Dataset):
                             keypoints_dict[tid] = deque([keypoints])
                             keypoints_score_dict[tid] = deque([keypoints_score])
                     
-                    # label = f'{tid}'
-                    # plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
-            # cv2.imshow('', nimg)
-            # cv2.waitKey(1)  # 1 millisecond
+                    if show_img:
+                        label = f'{tid}'
+                        plot_one_box(tlbr, nimg, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+            
+            if show_img:
+                cv2.imshow('', nimg)
+                cv2.waitKey(1)  # 1 millisecond
             #---------------------------------------------------------------------
 
         keypoints_from_all_tracking = []
@@ -378,8 +346,18 @@ class video_to_keypoint_dataset(Dataset):
         return np.array(keypoints_from_all_tracking), np.array(keypoints_score_from_all_tracking)
 
 
+def output_to_keypoint_and_detections(output):
+    detections = []
 
-def train_model(GCN_model, train_dataset, fake_anno, optimizer):
+    for o in output:
+        kpts = o[:,6:]
+        o = o[:,:6] # all detected boxes, format: tensor([ [box_coordinates_xyxy, confidence, class] x #of detections ]) 
+        for index, (*box, conf, cls) in enumerate(o.detach().cpu().numpy()):
+            detections.append([*box, conf, *(list(kpts.detach().cpu().numpy()[index]))])
+    return np.array(detections)
+
+
+def train_model(GCN_model, device, train_dataset, fake_anno, optimizer):
     image_shape = train_dataset.image_shape
 
     random_index = list(range(len(train_dataset)))
@@ -412,6 +390,7 @@ def train_model(GCN_model, train_dataset, fake_anno, optimizer):
     
     return loss_sublist
 
+
 def val_model(GCN_model, val_dataset, fake_anno):
     image_shape = train_dataset.image_shape
 
@@ -440,94 +419,29 @@ def val_model(GCN_model, val_dataset, fake_anno):
     return correct / len_dataset
 
 
-# parser = argparse.ArgumentParser()
-# parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
-# parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
-# parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
-# parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
-# parser.add_argument('--augment', action='store_true', help='augmented inference')
-# parser.add_argument('--name', default='exp', help='save results to project/name')
-
-# # tracking args
-# parser.add_argument("--track_high_thresh", type=float, default=0.3, help="tracking confidence threshold")
-# parser.add_argument("--track_low_thresh", default=0.05, type=float, help="lowest detection threshold")
-# parser.add_argument("--new_track_thresh", default=0.4, type=float, help="new track thresh")
-# parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
-# parser.add_argument("--match_thresh", type=float, default=0.7, help="matching threshold for tracking")
-# parser.add_argument("--aspect_ratio_thresh", type=float, default=1.6,
-#                     help="threshold for filtering out boxes of which aspect ratio are above the given value.")
-# parser.add_argument('--min_box_area', type=float, default=10, help='filter out tiny boxes')
-# parser.add_argument("--fuse-score", dest="mot20", default=False, action="store_true",
-#                     help="fuse score and iou for association")
-
-# # CMC
-# parser.add_argument("--cmc-method", default="sparseOptFlow", type=str, help="cmc method: sparseOptFlow | files (Vidstab GMC) | orb | ecc")
-
-# # ReID
-# parser.add_argument("--with-reid", dest="with_reid", default=False, action="store_true", help="with ReID module.")
-# parser.add_argument("--fast-reid-config", dest="fast_reid_config", default=r"fast_reid/configs/MOT17/sbs_S50.yml",
-#                     type=str, help="reid config file path")
-# parser.add_argument("--fast-reid-weights", dest="fast_reid_weights", default=r"pretrained/mot17_sbs_S50.pth",
-#                     type=str, help="reid config file path")
-# parser.add_argument('--proximity_thresh', type=float, default=0.5,
-#                     help='threshold for rejecting low overlap reid matches')
-# parser.add_argument('--appearance_thresh', type=float, default=0.25,
-#                     help='threshold for rejecting low appearance similarity reid matches')
-
-opt = args()
-
-opt.jde = False
-opt.ablation = False
-
-print(opt)
-#check_requirements(exclude=('pycocotools', 'thop'))
-
-#################################################################################################################
-#################################################################################################################
-train = True
-
-device = torch.device('cuda')
-
-train_dataset = video_to_keypoint_dataset(path='./dataset_train/', device=device)
-val_dataset = video_to_keypoint_dataset(path='./dataset_val/', device=device)
-#---------
-
 def main(lr, x, y):
-
-    config = mmcv.Config.fromfile('configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py')
+    config = mmcv.Config.fromfile(opt.stgcn_config)
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
     config.data.test.pipeline[2].pop('num_clips')
     
-    if train:
-        # dataset = video_to_keypoint_dataset(path='./train_dataset/', device=device)
+    GCN_model = init_recognizer(config, opt.stgcn_path, opt.device)
 
-        GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
+    for param in GCN_model.parameters():
+        param.requires_grad = False
 
-        for param in GCN_model.parameters():
-            param.requires_grad = False
+    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    # GCN_model.cls_head.fc_cls = nn.Sequential(
+    #     nn.Linear(GCN_model.cls_head.in_c, 120),
+    #     nn.ReLU(),
+    #     nn.Linear(120, 2),
+    # )
+    # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
 
-        GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
-        # GCN_model.cls_head.fc_cls = nn.Sequential(
-        #     nn.Linear(GCN_model.cls_head.in_c, 120),
-        #     nn.ReLU(),
-        #     nn.Linear(120, 2),
-        # )
-        # torch.nn.init.xavier_uniform(GCN_model.cls_head.fc_cls.weight)
+    for param in GCN_model.cls_head.fc_cls.parameters():
+        param.requires_grad = True
 
-        for param in GCN_model.cls_head.fc_cls.parameters():
-            param.requires_grad = True
-    else:
-        config['model']['cls_head']['num_classes'] = 2
 
-        # dataset = video_to_keypoint_dataset(path='./dataset/', device=device)
-
-        # GCN_model = init_recognizer(config, '.cache/stgcnpp_ntu120_xset_hrnet.pth', device)
-        GCN_model = init_recognizer(config, '.cache/new_model.pth', device)
-
-        for param in GCN_model.parameters():
-            param.requires_grad = False
-
-    GCN_model = GCN_model.to(device)
+    GCN_model = GCN_model.to(opt.device)
 
     # label_map = [x.strip() for x in open('tools/data/label_map/nturgbd_120.txt').readlines()]
     label_map = [x.strip() for x in open('tools/data/label_map/new2.txt').readlines()]
@@ -548,20 +462,13 @@ def main(lr, x, y):
     # optimizer = torch.optim.SGD(GCN_model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005, nesterov=True)
     optimizer = torch.optim.Adam(GCN_model.parameters(), lr=lr)
 
-    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.01,step_size_up=5,mode="triangular2")
-
-    # loss function
-    # criterion = nn.CrossEntropyLoss()
-    # criterion = nn.NLLLoss()
-
     loss_list = []
     accuracy_list = []
 
     epochs = 20
-    # random_index = list(range(len(train_dataset)))
 
     for epoch in range(epochs):
-        loss_sublist = train_model(GCN_model, train_dataset, fake_anno, optimizer)
+        loss_sublist = train_model(GCN_model, opt.device, train_dataset, fake_anno, optimizer)
         loss_list.append(np.mean(loss_sublist))
 
         accuracy = val_model(GCN_model, val_dataset, fake_anno)
@@ -569,53 +476,60 @@ def main(lr, x, y):
 
         # print('Epoch ', epoch+1, ' done.')
 
-    if train:
-        min_loss = min(loss_list)
-        min_acc = min(accuracy_list)
-        max_acc = max(accuracy_list)
-        mode_acc = statistics.mode(accuracy_list)
+    min_loss = min(loss_list)
+    min_acc = min(accuracy_list)
+    max_acc = max(accuracy_list)
+    mode_acc = statistics.mode(accuracy_list)
 
-        print('loss list: ', loss_list)
-        print("accuracy_list: ", accuracy_list)
-        # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
+    print('loss list: ', loss_list)
+    print("accuracy_list: ", accuracy_list)
+    # torch.save(GCN_model.state_dict(), '.cache/new_model.pth')
 
-        title = ('Adam lr = ' + str(lr) 
-                 + '\nmin loss = ' + f"{min_loss:.2f}" 
-                 + ',\nmin acc = ' + f"{min_acc:.2f}" 
-                 + ', max acc = ' + f"{max_acc:.2f}" 
-                 + '\nmode acc = ' + f"{mode_acc:.2f}")
+    title = ('Adam lr = ' + str(lr) 
+                + '\nmin loss = ' + f"{min_loss:.2f}" 
+                + ',\nmin acc = ' + f"{min_acc:.2f}" 
+                + ', max acc = ' + f"{max_acc:.2f}" 
+                + '\nmode acc = ' + f"{mode_acc:.2f}")
 
-        axis[x, y].plot(loss_list, '-o', accuracy_list, '-o')
-        axis[x, y].set_title(title, x=0.5, y=0.7)
-        axis[x, y].grid()
-        # axis.plot(loss_list, '-o', accuracy_list, '-o')
-        # axis.set_title(title, x=0.5, y=0.8)
+    axis[x, y].plot(loss_list, '-o', accuracy_list, '-o')
+    axis[x, y].set_title(title, x=0.5, y=0.7)
+    axis[x, y].grid()
+    # axis.plot(loss_list, '-o', accuracy_list, '-o')
+    # axis.set_title(title, x=0.5, y=0.8)
 
+if __name__ == '__main__':
+    opt = args()
+    opt.jde = False
+    opt.ablation = False
+    # print(opt)
 
-lst1 = list(np.linspace(0.001, 0.009, num=9))
-lst2 = list(np.linspace(0.01, 0.11, num=11))
-lst2 = [np.float64(f"{num:.2f}") for num in lst2]
-lst = lst1 + lst2
-lst = [0.01]
+    train_dataset = video_to_keypoint_dataset(path='./dataset_train/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
+    val_dataset = video_to_keypoint_dataset(path='./dataset_val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
 
-for loop in range(1):
-    x, y = 0, 0
-    num_plot_row = 4
-    num_plot_col = 5
-    figure, axis = plt.subplots(num_plot_row, num_plot_col)
-    figure.set_figheight(20)
-    figure.set_figwidth(40)
+    lst1 = list(np.linspace(0.001, 0.009, num=9))
+    lst2 = list(np.linspace(0.01, 0.11, num=11))
+    lst2 = [np.float64(f"{num:.2f}") for num in lst2]
+    lst = lst1 + lst2
+    lst = [0.01]
 
-    for lr in lst:
-        # print(lr)
-        main(lr, x, y)
+    for loop in range(1):
+        x, y = 0, 0
+        num_plot_row = 4
+        num_plot_col = 5
+        figure, axis = plt.subplots(num_plot_row, num_plot_col)
+        figure.set_figheight(20)
+        figure.set_figwidth(40)
 
-        if y < 4:
-                y += 1
-        else:
-            y = 0
-            x += 1
-    # file_name = './plots/lr_Adam_' + str(loop) + '.jpg'
-    # file_name = './plots/lr_Adam.jpg'
-    plt.show()
-    # plt.savefig(file_name)
+        for lr in lst:
+            # print(lr)
+            main(lr, x, y)
+
+            if y < 4:
+                    y += 1
+            else:
+                y = 0
+                x += 1
+        # file_name = './plots/lr_Adam_' + str(loop) + '.jpg'
+        # file_name = './plots/lr_Adam.jpg'
+        plt.show()
+        # plt.savefig(file_name)
