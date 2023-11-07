@@ -5,6 +5,7 @@ dataset_train/
 dataset_val/
 video/
 build/
+gif/
 
 *.ipynb
 *.pkl
