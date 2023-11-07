@@ -1,10 +1,10 @@
+__pycache__/
 pretrained/
 tools/data/
-test_image/
-dataset/
 dataset_train/
 dataset_val/
 video/
+build/
 
 *.ipynb
 *.pkl

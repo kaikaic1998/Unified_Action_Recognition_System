@@ -185,8 +185,6 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
     return top5_label
 
 
-
-# def train_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
 def train_recognizer(model, video, class_label, outputs=None, as_tensor=True, **kwargs):
     input_flag = None
     if isinstance(video, dict):

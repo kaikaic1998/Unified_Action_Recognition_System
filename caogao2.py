@@ -5,6 +5,8 @@ import cv2
 import glob
 import matplotlib.patches as patches
 from pathlib import Path
+import pathlib
+import os
 
 def try_argument():
     import argparse
@@ -266,34 +268,51 @@ def input_video_output_resize_video():
         padded_image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=padding_color)
 
         return padded_image
-    
-    images = []
-    resized_image = []
-    # w, h = 854, 480
 
-    video_name = './dataset_train/notfall/video (5).mp4'
+    video_paths = list(pathlib.Path('./dataset_val/').glob("*/*.*"))
 
-    video = cv2.VideoCapture(video_name)
-    while(True):
-        ret,frame = video.read()
-        if ret:
-            images.append(frame)
-        else:
-            break
-    video.release()
+    count = 1
 
-    for image in images:
-        image = func(image)
-        # dim = (w, h)
-        # image = cv2.resize(image, dim)
+    for video_path in video_paths:
+        if count > 4:
+            count = 1
 
-        resized_image.append(image)
-    h, w, _ = resized_image[0].shape
-    size = (w, h)
+        images = []
+        resized_image = []
 
-    out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
-    for i in range(len(resized_image)):
-        out.write(resized_image[i])
-    out.release()
+        video_path = str(video_path).split("/")[0]
+
+        video = cv2.VideoCapture(video_path)
+        while(True):
+            ret,frame = video.read()
+            if ret:
+                images.append(frame)
+            else:
+                break
+        video.release()
+        
+        # h, w, _ = images[0].shape
+        # size = (w, h)
+
+        for image in images:
+            # image = func(image)
+            dim = (960, 720)
+            image = cv2.resize(image, dim)
+            resized_image.append(image)
+        h, w, _ = resized_image[0].shape
+        size = (w, h)
+
+        save_video_name = str(os.path.dirname(video_path)) + '/video_' + str(count) + '.mp4'
+
+        out = cv2.VideoWriter(save_video_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
+        for i in range(len(resized_image)):
+            out.write(resized_image[i])
+        # for i in range(len(images)):
+        #     out.write(images[i])
+        out.release()
+
+        count += 1
 input_video_output_resize_video()
+
+
 
