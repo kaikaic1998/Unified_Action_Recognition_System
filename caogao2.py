@@ -247,6 +247,31 @@ def gif_to_video():
     out.release()
 # gif_to_video()
 
+def video_to_gif():
+    images = []
+    frames = []
+
+    video_path = './video/video_4.mp4'
+
+    video = cv2.VideoCapture(video_path)
+    while(True):
+        ret,frame = video.read()
+        if ret:
+            images.append(frame)
+        else:
+            break
+    video.release()
+
+    for image in images:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
+        image = Image.fromarray(image)
+        frames.append(image)
+    
+    frame_one = frames[0]
+    frame_one.save('C:/Users/Kainian/Desktop/WorkSpace/new_project/gif/fall/not_fall_train_4.gif', 
+                   format='GIF', append_images=frames, save_all=True, loop=0)
+# video_to_gif()
+
 def input_video_output_resize_video():
     def func(image):
         h, w, _ = image.shape
@@ -312,7 +337,105 @@ def input_video_output_resize_video():
         out.release()
 
         count += 1
-input_video_output_resize_video()
+# input_video_output_resize_video()
 
 
+
+def pad_img(image):
+        pad_width = 5
+        pad_height = 5
+
+        top = pad_height
+        bottom = pad_height
+        left = pad_width
+        right = pad_width
+
+        padding_color = (255, 255, 255)  # Black
+
+        # Add padding to the image
+        padded_image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=padding_color)
+        return padded_image
+
+def read_gif(path):
+    images = []
+    gif = cv2.VideoCapture(path)
+    while(True):
+        ret,frame = gif.read()
+        if ret:
+            images.append(frame)
+        else:
+            break
+    gif.release()
+    return images
+
+def concat_train(img_lst, size):
+    # num_frames = len(min(img_lst, key=len))
+    num_frames = 58
+    half_img_lst = int((len(img_lst))/2) # 4
+
+    frames = []
+
+    for i in range(num_frames):
+        img_sub = []
+        for images in img_lst:
+            img_sub.append(pad_img(images[i]))
+
+        concat_v1 = cv2.vconcat(img_sub[ :half_img_lst])
+        concat_v2 = cv2.vconcat(img_sub[half_img_lst: ])
+        concat_h = cv2.hconcat([concat_v1, concat_v2])
+        concat_h = cv2.resize(concat_h, size)
+    
+        # concat_h = cv2.cvtColor(concat_h, cv2.COLOR_BGR2RGB) 
+        
+        # # put text
+        # concat_h = cv2.putText(concat_h, 'fall', (100,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX,  
+        #            fontScale=1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+        # concat_h = cv2.putText(concat_h, 'not fall', (426,50), fontFace=cv2.FONT_HERSHEY_SIMPLEX,  
+        #            fontScale=1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+        
+        # # conver for using in PIL
+        # concat_h = Image.fromarray(concat_h)
+
+        frames.append(concat_h)
+    return frames
+
+def concat_val(img_lst, size):
+    num_frames = 58
+    frames = []
+
+    for i in range(num_frames):
+        concat_v = cv2.vconcat([pad_img(img_lst[0][i]), pad_img(img_lst[1][i])])
+        concat_v = cv2.resize(concat_v, size)
+        frames.append(concat_v)
+    return frames
+
+
+gif_paths = list(pathlib.Path('gif/fall').glob("*/*.*"))
+
+img_lst = dict()
+
+for gif_path in gif_paths:
+    folder_name = str(os.path.basename(os.path.dirname(gif_path)))
+
+    if folder_name in img_lst:
+        img_lst[folder_name].append(read_gif(str(gif_path)))
+    else:
+        img_lst[folder_name] = [read_gif(str(gif_path))]
+
+concate_train = concat_train(img_lst['train'], (500, 800))
+concate_val = concat_val(img_lst['val'], (300, 800))
+
+center_img = cv2.imread('video/img.jpg')
+center_img = cv2.resize(center_img, (800,800))
+
+frames = []
+for i in range(len(concate_train)):
+    concat_h = cv2.hconcat([concate_train[i], center_img, concate_val[i]])
+    concat_h = cv2.cvtColor(concat_h, cv2.COLOR_BGR2RGB)
+    concat_h = Image.fromarray(concat_h)
+    frames.append(concat_h)
+
+frame_one = frames[0]
+frame_one.save('C:/Users/Kainian/Desktop/WorkSpace/new_project/gif/gif.gif', 
+                format='GIF', append_images=frames, save_all=True, loop=0)
 
