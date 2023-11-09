@@ -96,7 +96,6 @@ def detect():
     online_ids = defaultdict(int)
     action_label = ''
     
-    count = 0
     for path, img, im0, vid_cap in dataset: # one dataset = one frame
         img = torch.from_numpy(img).to(opt.device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -175,7 +174,6 @@ def detect():
 
         cv2.imshow('', nimg)
         cv2.waitKey(1)  # 1 millisecond
-        count += 1
 
     end_time = time.time()
     execution_time = end_time - start_time

@@ -1,11 +1,7 @@
 __pycache__/
 pretrained/
-tools/data/
-dataset_train/
-dataset_val/
-video/
 build/
-gif/
+data/
 
 *.ipynb
 *.pkl
