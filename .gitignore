@@ -1,7 +1,8 @@
 __pycache__/
-pretrained/
 build/
 data/
 
 *.ipynb
 *.pkl
+*.pth
+*.pt
