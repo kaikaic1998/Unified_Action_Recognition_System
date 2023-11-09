@@ -13,17 +13,16 @@ if __name__ == '__main__':
     opt.jde = False
     opt.ablation = False
 
-    train_dataset = video_to_keypoint_dataset(path='./dataset_train/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
-    val_dataset = video_to_keypoint_dataset(path='./dataset_val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
+    train_dataset = video_to_keypoint_dataset(path='./dataset/dataset_train/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
+    val_dataset = video_to_keypoint_dataset(path='./dataset/dataset_val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
 
     # create new class labels from training, for reference
-    if opt.create_new_label:
-        f = open('tools/data/label_map/new_label.txt', 'w')
-        for class_name in train_dataset.classes:
-            text = str(class_name) + '\n'
-            f.write(text)
-        f.close()
-        print('\nCreated new class labels from training dataset: \ntools/data/label_map/new_label.txt\n')
+    f = open('tools/data/label_map/new_label.txt', 'w+')
+    for class_name in train_dataset.classes:
+        text = str(class_name) + '\n'
+        f.write(text)
+    f.close()
+    print('\nCreated new class labels from training dataset: \ntools/data/label_map/new_label.txt\n')
 
     #--------------initialize recognizer---------------
     config = mmcv.Config.fromfile(opt.stgcn_config)
@@ -36,7 +35,7 @@ if __name__ == '__main__':
     for param in GCN_model.parameters():
         param.requires_grad = False
 
-    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, 2)
+    GCN_model.cls_head.fc_cls = nn.Linear(GCN_model.cls_head.in_c, len(train_dataset.classes))
 
     for param in GCN_model.cls_head.fc_cls.parameters():
         param.requires_grad = True

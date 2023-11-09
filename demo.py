@@ -66,14 +66,22 @@ def detect():
         len_of_sliding_window = int(num_total_frames/3) - 5
 
     #-------------------Action Recognition Model Initialization----------------------------
+    try:
+        f = open(opt.label_path,'r')
+        num_class = len(f.readlines())
+        f.close()
+    except IOError:
+        print('\nERROR: Can not find new_label.txt!')
+        print('The file may be not exist or may have a different file name\n')
+
     config = mmcv.Config.fromfile(opt.stgcn_config)
     config.data.test.pipeline = [x for x in config.data.test.pipeline if x['type'] != 'DecompressPose']
-    config['model']['cls_head']['num_classes'] = 2
+    config['model']['cls_head']['num_classes'] = num_class
 
     GCN_model = init_recognizer(config, opt.new_stgcn_path, opt.device)
     
     # Load label_map
-    label_map = [x.strip() for x in open('tools/data/label_map/new_label.txt').readlines()]
+    label_map = [x.strip() for x in open(opt.label_path).readlines()]
 
     fake_anno = dict(
         frame_dir='',

@@ -347,11 +347,11 @@ def args():
     parser.add_argument('--stgcn-config', default='configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py', help='config for pretrained STGCN model')
     parser.add_argument('--stgcn-path', default='pretrained/stgcnpp_ntu120_xset_hrnet.pth', help='pretrained STGCN model path')
     parser.add_argument('--new-stgcn-path', default='pretrained/new_model.pth', help='newly fine-tuned STGCN model path')
-    parser.add_argument('--create-new-label', default=False, help='create a new label for newly defined classes from fine-tuned STGCN model')
     parser.add_argument('--save-model', default=False, help='save newly fine-tuned STGCN model')
     parser.add_argument('--lr', default=0.01, help='training learning rate')
     parser.add_argument('--epoch', default=30, help='training epoch')
     parser.add_argument('--source', default='./video/fall.mp4', help="demo video, '0' for webcam")
+    parser.add_argument('--label-path', default='tools/data/label_map/new_label.txt', help='labels for inference')
 
     # detector args
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
@@ -448,9 +448,6 @@ def val_model(GCN_model, val_dataset, fake_anno):
         GCN_model.eval()
         
         results = inference_recognizer(GCN_model, fake_anno)
-        print('\nresults: ', results)
-        print('ground truth: ', gt_class)
-        print('is it correct? ', gt_class == results[0][0])
 
         correct += (gt_class == results[0][0])
 
