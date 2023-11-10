@@ -13,8 +13,8 @@ if __name__ == '__main__':
     opt.jde = False
     opt.ablation = False
 
-    train_dataset = video_to_keypoint_dataset(path='./dataset/dataset_train/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
-    val_dataset = video_to_keypoint_dataset(path='./dataset/dataset_val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
+    train_dataset = video_to_keypoint_dataset(path='./dataset/train/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
+    val_dataset = video_to_keypoint_dataset(path='./dataset/val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
 
     # create new class labels from training, for reference
     f = open('label_map/new_label.txt', 'w+')
@@ -76,5 +76,5 @@ if __name__ == '__main__':
     plot_result(loss_list, accuracy_list)
 
     if opt.save_model:
-        torch.save(GCN_model.state_dict(), 'pretrained/new_model.pth')
+        torch.save(GCN_model.state_dict(), opt.new_stgcn_path)
         print('\nSaved newly fine-tuned model: pretrained/new_model.pth\n')

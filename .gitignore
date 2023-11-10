@@ -4,5 +4,4 @@ data/
 
 *.ipynb
 *.pkl
-*.pth
 *.pt

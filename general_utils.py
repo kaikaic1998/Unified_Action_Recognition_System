@@ -345,7 +345,7 @@ def args():
     parser.add_argument('--yolo-model-path', default='pretrained/yolov7-w6-pose.pt', help='path of the pretrained YOLO model')
     parser.add_argument('--show-img', default=False, help='Show tracking and keypoints when training')
     parser.add_argument('--stgcn-config', default='configs/stgcn++/stgcn++_ntu120_xset_hrnet/j.py', help='config for pretrained STGCN model')
-    parser.add_argument('--stgcn-path', default='pretrained/stgcnpp_ntu120_xset_hrnet.pth', help='pretrained STGCN model path')
+    parser.add_argument('--stgcn-path', default='pretrained/j.pth', help='pretrained STGCN model path')
     parser.add_argument('--new-stgcn-path', default='pretrained/new_model.pth', help='newly fine-tuned STGCN model path')
     parser.add_argument('--save-model', default=False, help='save newly fine-tuned STGCN model')
     parser.add_argument('--lr', default=0.01, help='training learning rate')
