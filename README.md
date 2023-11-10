@@ -17,10 +17,8 @@ Aircraft Marshaller Signals
 </p>
 
 <h2 align="center">Setup Environment for Demo</h2>
-<p align="left">
 
 The code requires `python>=3.8`, as well as `pytorch>=1.7` and `torchvision>=0.8`. Please follow the instructions [here](https://pytorch.org/get-started/locally/) to install both PyTorch and TorchVision dependencies. Installing both PyTorch and TorchVision with CUDA support is strongly recommended.
-</p>
 
 <h3 align="center">Clone the repository locally</h3>
 
@@ -53,7 +51,6 @@ cd ../
 ```
 
 <h3 align="center">Pre-trained Model Checkoints</h3>
-<p align="left">
 
 Download [YOLOv7 Pose](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-person.pt) pre-trained models and put them in 'pretrained' folder
 
@@ -115,19 +112,32 @@ python train.py --save-model True
 
 <h3 align="center">System Backbone</h3>
 <p align="center">
-
-| Description | Model |
-|:---|:---:|
-| Detection & Pose Estimation | YOLOv7 Pose |
-| Tracking | BoT-SORT |
-| Skeleton Action Recognition | STGCN++ |
-<p>
+<table class="center">
+  <tr>
+    <td align='left'>Description</td>
+    <td align='left'>Model</td>
+  </tr>
+  <tr>
+    <td align='left'>Detection & Pose Estimation</td>
+    <td align='left'>YOLOv7 Pose</td>
+  </tr>
+  <tr>
+    <td align='left'>Tracking</td>
+    <td align='left'>BoT-SORT</td>
+  </tr>
+  <tr>
+    <td align='left'>Skeleton Action Recognition</td>
+    <td align='left'>STGCN++</td>
+  </tr>
+</table>
+</p>
 
 <h3 align="center">System Architecture</h3>
 
 Input media is first input into the first layer where the system detect, track all human in a frame and produce a set of keypoints for each of them.
 
 As long as each set is filled with 20 keypoints, then is fed into the Action Recognition layer to predict an action label for each set of keypoints, hence, a label for a tracked human. This oepration is realized by using sliding window method, enabling real-time action recognition.
+
 <p align="center">
 <img src="./assets/System_Architecture.jpg" width=100% class="center">
 </p>
