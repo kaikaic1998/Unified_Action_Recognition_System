@@ -1,4 +1,4 @@
-<h1 align="center">Unified Action Recognition System</h1>
+# Unified Action Recognition System
 
 Presenting a highly adaptable unified Action Recognition System.
 
@@ -6,27 +6,30 @@ The goal is to enable users to easily customize the system to suit their applica
 
 This system can be fine-tuned to recognize as many actions as needed, by just providing a few videos for each action. The resulting fine-tuned model is capable of real-time action recognition with a webcam.
 
-<h2 align="center">Demo</h2>
-<p align="center">
-Fall Detection
+## Demo
+<p align="left">
+
+#### Fall Detection
 <img src="./assets/fall.gif" width=100% class="center">
-Ball Kicking Analysis
+
+#### Ball Kicking Analysis
 <img src="./assets/kick.gif" width=100% class="center">
-Aircraft Marshaller Signals
+
+#### Aircraft Marshaller Signals
 <img src="./assets/guide.gif" width=100% class="center">
 </p>
 
-<h2 align="center">Setup Environment for Demo</h2>
+## Setup Environment for Demo
 
 The code requires `python>=3.8`, as well as `pytorch>=1.7` and `torchvision>=0.8`. Please follow the instructions [here](https://pytorch.org/get-started/locally/) to install both PyTorch and TorchVision dependencies. Installing both PyTorch and TorchVision with CUDA support is strongly recommended.
 
-<h3 align="center">Clone the repository locally</h3>
+### Clone the repository locally
 
 ```
 git clone https://github.com/kaikaic1998/Unified_Action_Recognition_System.git
 cd Unified_Action_Recognition_System
 ```
-<h3 align="center">Installation</h3>
+### Installation
 
 **Step 1.** Install libraries
 ```
@@ -50,11 +53,11 @@ python setup.py install
 cd ../
 ```
 
-<h3 align="center">Pre-trained Model Checkoints</h3>
+## Pre-trained Model Checkoints
 
-Download [YOLOv7 Pose](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-person.pt) pre-trained models and put them in 'pretrained' folder
+Download [YOLOv7 Pose](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-person.pt) pre-trained models and put them in `pretrained/` folder
 
-<h3 align="center">Demo</h3>
+### Demo
 
 A sample video is provided in video/fall.mp4 for demo.
 
@@ -64,7 +67,7 @@ Provided model is pretrained for Human Fall Detection.
 python demo.py
 ```
 
-<h3 align="center">Fine-tune</h3>
+### Fine-tune
 
 You can try fine-tune the model to recognize your custom action.
 
@@ -108,32 +111,18 @@ The newly fine-tuned model can automatically identfy the number of actions to be
 python train.py --save-model True
 ```
 
-<h2 align="center">More about the Unified Action Recognition System</h2>
+## More about the Unified Action Recognition System
 
-<h3 align="center">System Backbone</h3>
+### System Backbone</h3>
 
-<p align="center">
-<table>
-  <tr>
-    <td align='left'>Description</td>
-    <td align='left'>Model</td>
-  </tr>
-  <tr>
-    <td align='left'>Detection & Pose Estimation</td>
-    <td align='left'>YOLOv7 Pose</td>
-  </tr>
-  <tr>
-    <td align='left'>Tracking</td>
-    <td align='left'>BoT-SORT</td>
-  </tr>
-  <tr>
-    <td align='left'>Skeleton Action Recognition</td>
-    <td align='left'>STGCN++</td>
-  </tr>
-</table>
-</p>
+| Description | Model |
+|:---|:---:|
+| Detection & Pose Estimation | YOLOv7 Pose |
+| Tracking | BoT-SORT |
+| Skeleton Action Recognition | STGCN++ |
 
-<h3 align="center">System Architecture</h3>
+
+### System Architecture
 
 Input media is first input into the first layer where the system detect, track all human in a frame and produce a set of keypoints for each of them.
 
@@ -143,7 +132,7 @@ As long as each set is filled with 20 keypoints, then is fed into the Action Rec
 <img src="./assets/System_Architecture.jpg" width=100% class="center">
 </p>
 
-<h3 align="center">Experiment on Learning Rate</h3>
+### Experiment on Learning Rate
 
 The most suitable learning rate is discovered and provided as default value for users to easily fine-tune the model without the concern of underperforming training process.
 
@@ -155,7 +144,7 @@ Below is one of the trials, showing multiple learning rate candidates. The learn
 <img src="./assets/Train_different_lr.jpg" width=100% class="center">
 </p>
 
-<h2 align="center">Citation</h2>
+## Citation
 
 ```
 @article{aharon2022bot,
