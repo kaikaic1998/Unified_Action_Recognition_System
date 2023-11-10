@@ -17,12 +17,12 @@ if __name__ == '__main__':
     val_dataset = video_to_keypoint_dataset(path='./dataset/dataset_val/', device=opt.device, yolo_model_path=opt.yolo_model_path, opt=opt, show_img=opt.show_img)
 
     # create new class labels from training, for reference
-    f = open('tools/data/label_map/new_label.txt', 'w+')
+    f = open('label_map/new_label.txt', 'w+')
     for class_name in train_dataset.classes:
         text = str(class_name) + '\n'
         f.write(text)
     f.close()
-    print('\nCreated new class labels from training dataset: \ntools/data/label_map/new_label.txt\n')
+    print('\nCreated new class labels from training dataset: \nlabel_map/new_label.txt\n')
 
     #--------------initialize recognizer---------------
     config = mmcv.Config.fromfile(opt.stgcn_config)

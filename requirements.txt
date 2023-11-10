@@ -1,0 +1,29 @@
+Pillow
+numpy==1.23.5
+opencv-python
+matplotlib
+pandas
+seaborn
+mmcv-full==1.5.0
+mmdet==2.23.0
+mmpose==0.24.0
+yacs
+termcolor
+scikit-learn
+termcolor
+tensorboard
+fvcore
+faiss-cpu
+lap
+
+
+pip install -e git+https://github.com/samson-wang/cython_bbox.git#egg=cython-bbox
+
+pip install lap
+git clone https://github.com/gatagat/lap.git
+python setup.py build
+python setup.py install
+
+torch==2.1.0+cu118
+torchaudio==2.1.0+cu118
+torchvision==0.16.0+cu118

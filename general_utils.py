@@ -351,7 +351,7 @@ def args():
     parser.add_argument('--lr', default=0.01, help='training learning rate')
     parser.add_argument('--epoch', default=30, help='training epoch')
     parser.add_argument('--source', default='./video/fall.mp4', help="demo video, '0' for webcam")
-    parser.add_argument('--label-path', default='tools/data/label_map/new_label.txt', help='labels for inference')
+    parser.add_argument('--label-path', default='label_map/new_label.txt', help='labels for inference')
 
     # detector args
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
