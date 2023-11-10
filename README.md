@@ -37,9 +37,18 @@ pip install -r requirements.txt
 ```
 pip install -e git+https://github.com/samson-wang/cython_bbox.git#egg=cython-bbox
 ```
-Note: If pip install lap failed to install, try below
+**Step 3.** Install lap
+```
+pip install lap
+```
+If above is not successful, try below:
 ```
 git clone https://github.com/gatagat/lap.git
+cd lap
 python setup.py build
 python setup.py install
+cd ../
 ```
+**Step 4.** Install Pytorch
+
+The code requires `python>=3.8`, as well as `pytorch>=1.7` and `torchvision>=0.8`. Please follow the instructions [here](https://pytorch.org/get-started/locally/) to install both PyTorch and TorchVision dependencies. Installing both PyTorch and TorchVision with CUDA support is strongly recommended.
