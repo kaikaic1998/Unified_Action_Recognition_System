@@ -111,8 +111,9 @@ python train.py --save-model True
 <h2 align="center">More about the Unified Action Recognition System</h2>
 
 <h3 align="center">System Backbone</h3>
+
 <p align="center">
-<table class="center">
+<table>
   <tr>
     <td align='left'>Description</td>
     <td align='left'>Model</td>
