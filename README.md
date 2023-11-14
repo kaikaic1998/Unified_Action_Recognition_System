@@ -4,7 +4,7 @@ Presenting a highly adaptable unified Action Recognition System.
 
 The goal is to enable users to easily customize the system to suit their applications.
 
-This system can be fine-tuned to recognize as many actions as needed, by just providing a few videos for each action. The resulting fine-tuned model is capable of real-time action recognition with a webcam.
+This system can be fine-tuned to recognize as many actions as needed, by just providing a few videos for each action. The resulting fine-tuned model is capable of identifying any custom action, as well as real-time action recognition with webcam.
 
 ## Demo
 <p align="left">
@@ -55,7 +55,7 @@ cd ../
 
 ## Pre-trained Model Checkoints
 
-Download [YOLOv7 Pose](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-person.pt) pre-trained models and put them in `pretrained/` folder
+Download [YOLOv7 Pose](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-person.pt) pre-trained models and put it in `pretrained/` folder
 
 ### Demo
 
@@ -69,7 +69,7 @@ python demo.py
 
 ### Fine-tune
 
-You can try fine-tune the model to recognize your custom action.
+You can try fine-tuning the model to recognize your own custom action.
 
 **Data Preparation**
 
@@ -126,7 +126,7 @@ python train.py --save-model True
 
 Input media is first input into the first layer where the system detect, track all human in a frame and produce a set of keypoints for each of them.
 
-As long as each set is filled with 20 keypoints, then is fed into the Action Recognition layer to predict an action label for each set of keypoints, hence, a label for a tracked human. This oepration is realized by using sliding window method, enabling real-time action recognition.
+As long as each set is filled with 20 keypoints, then is fed into the Action Recognition layer to predict an action label for each set of keypoints, hence, one label for one tracked human. This oepration is realized by using the sliding window method, enabling real-time action recognition.
 
 <p align="center">
 <img src="./assets/System_Architecture.jpg" width=100% class="center">
@@ -136,7 +136,7 @@ As long as each set is filled with 20 keypoints, then is fed into the Action Rec
 
 The most suitable learning rate is discovered and provided as default value for users to easily fine-tune the model without the concern of underperforming training process.
 
-During the experiment, various learning rate values are trialed in training and the experiment is performed multiple times. 
+During the experiment, different learning rate values are trialed in training and the experiment is performed multiple times. 
 
 Below is one of the trials, showing multiple learning rate candidates. The learning rate of 0.01 is found to have the best outcome.
 
