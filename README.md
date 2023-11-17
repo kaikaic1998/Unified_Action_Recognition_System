@@ -115,11 +115,11 @@ python train.py --save-model True
 
 ### System Backbone</h3>
 
-| Description | Model |
-|:---|:---:|
-| Detection & Pose Estimation | YOLOv7 Pose |
-| Tracking | BoT-SORT |
-| Skeleton Action Recognition | STGCN++ |
+| Description | Model | Repo Link |
+|:---|:---:|:---:|
+| Detection & Pose Estimation | YOLOv7 Pose | [YOLOv7](https://github.com/WongKinYiu/yolov7) |
+| Tracking | BoT-SORT | [BoT-SORT](https://github.com/NirAharon/BoT-SORT) |
+| Skeleton Action Recognition | STGCN++ | [PYSKL](https://github.com/kennymckormick/pyskl) |
 
 
 ### System Architecture
